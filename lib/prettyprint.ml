@@ -9,7 +9,7 @@ let rec string_of_expr = function
   | False -> "false"
   | Var x -> x
   | IntConst n -> string_of_int n
-  | StringConst s -> "\"" ^ s ^ "\""
+  | AddrConst s -> "\"" ^ s ^ "\""
   | Not e -> "not " ^ string_of_expr e
   | And(e1,e2) -> string_of_expr e1 ^ " and " ^ string_of_expr e2
   | Or(e1,e2) -> string_of_expr e1 ^ " or " ^ string_of_expr e2
@@ -86,7 +86,7 @@ let rec vars_of_expr = function
     True
   | False
   | IntConst _ -> []
-  | StringConst _ -> []               
+  | AddrConst _ -> []               
   | Var x -> [x]
   | Not e -> vars_of_expr e
   | And(e1,e2) 

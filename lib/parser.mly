@@ -58,6 +58,8 @@ open Ast
 %type <args> args
 %type <expr> expr 
 
+%start <cmd> cmd_test
+
 %%
 
 contract:
@@ -66,7 +68,7 @@ contract:
 
 expr:
   | n = CONST { IntConst(int_of_string n) }
-  | s = STRING { StringConst(s) }
+  | s = STRING { AddrConst(s) }
   | TRUE { True }
   | FALSE { False }
   | NOT; e=expr { Not e }
@@ -93,6 +95,10 @@ cmd:
   | f = ID; LPAREN; e=expr; RPAREN { Call(f,e) }
   | c1 = cmd; CMDSEP; c2 = cmd; { Seq(c1,c2) } %prec CMDSEP
   | LBRACE; c = cmd; RBRACE { c }
+;
+
+cmd_test:
+  | c = cmd; EOF { c }
 ;
 
 args:

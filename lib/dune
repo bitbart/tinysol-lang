@@ -1,5 +1,5 @@
 (library
- (name tinysol))
+ (name tinysolLib))
 
 (menhir
  (modules parser))

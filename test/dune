@@ -1,2 +1,5 @@
-(test
- (name test_tinysol_lang))
+(library
+ (name test)
+ (inline_tests) 
+ (preprocess (pps ppx_inline_test))
+ (libraries tinysolLib))

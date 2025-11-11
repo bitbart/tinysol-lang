@@ -1,4 +1,4 @@
 (executable
  (public_name tinysol)
  (name main)
- (libraries tinysol))
+ (libraries tinysolLib))

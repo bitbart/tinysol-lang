@@ -1,5 +1,5 @@
-open Tinysol.Prettyprint
-open Tinysol.Main
+open TinysolLib.Prettyprint
+open TinysolLib.Main
        
 (* read file, and output it to a string *)
 
@@ -18,11 +18,11 @@ let read_line () =
 match Array.length(Sys.argv) with
 (* trace n / read input from stdin *) 
   1 -> (match read_line() with
-      Some s when s<>"" -> s |> parse |> string_of_contract |> print_string
+      Some s when s<>"" -> s |> parse_cmd |> string_of_cmd |> print_string
     | _ -> print_newline())
 (* trace1 / read input from file *) 
 | 2 -> (match read_file Sys.argv.(1) with
       "" -> print_newline()
-    | s -> s |> parse |> string_of_contract |> print_string)
+    | s -> s |> parse_contract |> string_of_contract |> print_string)
 (* wrong usage *)      
 | _ -> failwith "Usage: dune exec tinysol-lang n_steps [file]"
