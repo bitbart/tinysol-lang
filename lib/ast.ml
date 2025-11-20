@@ -4,13 +4,6 @@ type ide = string
 (* address identifier *)
 type addr = string
 
-(* exprval: values associated to (contract and local) variables *)
-
-type exprval = 
-  | Bool of bool 
-  | Int of int
-  | Addr of string
-
 (* expressions *)
 
 type expr =
@@ -71,6 +64,13 @@ and var_decls = var_decl list
 and fun_decls = fun_decl list
 
 type contract = Contract of ide * var_decls * fun_decls
+
+(* exprval: values associated to (contract and local) variables *)
+
+type exprval = 
+  | Bool of bool 
+  | Int of int
+  | Addr of string
 
 (* in a deploy transaction, the txfun is "constructor" and the first argument is the contract code *)
 

@@ -2,6 +2,7 @@ open TinysolLib.Ast
 open TinysolLib.Types       
 open TinysolLib.Utils
 open TinysolLib.Main
+open TinysolLib.Static
 
 
 (********************************************************************************
@@ -197,3 +198,40 @@ let%test "test_exec_tx_8" = test_exec_tx
   c4
   ["0xA:0xC.f{value : 3}()"] 
   ["x==1"; "this.balance==3"]
+
+
+let test_typecheck (src: string) (exp : bool)=
+  let c = parse_contract src in typecheck_contract c = exp  
+
+let%test "test_typecheck_0" = test_typecheck 
+  "contract C0 { }"
+  true
+
+let%test "test_typecheck_1" = test_typecheck c1 true
+
+let%test "test_typecheck_2" = test_typecheck c2 true
+
+let%test "test_typecheck_3" = test_typecheck c3 true
+
+let%test "test_typecheck_4" = test_typecheck c4 true
+
+let%test "test_typecheck_5" = test_typecheck 
+"contract C {
+    int x;
+    function f(bool b) public { x = b; }
+}"
+false
+
+let%test "test_typecheck_6" = test_typecheck 
+"contract C {
+    int x;
+    function f(bool x) public { x = true; }
+}"
+true
+
+let%test "test_typecheck_7" = test_typecheck 
+"contract C {
+    int x;
+    function f(bool x) public { x = 1; }
+}"
+false
