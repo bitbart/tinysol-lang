@@ -156,6 +156,12 @@ let is_immutable (x : ide) (vdl : var_decls) =
   false 
   vdl
 
+let typecheck_local_decls (vdl : var_decls) = 
+  List.for_all
+  (fun vd -> match vd with 
+    | MapT(_),_ -> false
+    | _ -> true)
+  vdl
 
 let rec typecheck_cmd (is_constr : bool) (vdl : var_decl list) = function 
     | Skip -> true
@@ -191,17 +197,19 @@ let rec typecheck_cmd (is_constr : bool) (vdl : var_decl list) = function
         let te = typecheck_expr vdl e in
         if te = BoolET then true else raise (TypeError (e,te,BoolET))
     | Block(lvdl,c) -> 
+        typecheck_local_decls lvdl &&
         let vdl' = merge_var_decls vdl lvdl in
         typecheck_cmd is_constr vdl' c
     | _ -> failwith "TODO (Call)"
 
-
 let typecheck_fun (vdl : var_decl list) = function
   | Constr (al,c,_) ->
-      no_dup_var_decls al && 
+      no_dup_var_decls al &&
+      typecheck_local_decls al && 
       typecheck_cmd true (merge_var_decls vdl al) c
   | Proc (_,al,c,_,__) ->
       no_dup_var_decls al && 
+      typecheck_local_decls al &&
       typecheck_cmd false (merge_var_decls vdl al) c
 
 let typecheck_contract (Contract(_,vdl,fdl)) =

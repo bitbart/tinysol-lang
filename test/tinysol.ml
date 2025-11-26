@@ -592,7 +592,7 @@ let%test "test_typecheck_41" = test_typecheck
   }"
   true
 
-let%test "test_typecheck_42" = test_typecheck 
+let%test "test_typecheck_mapping_1" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       uint x;
@@ -601,7 +601,7 @@ let%test "test_typecheck_42" = test_typecheck
   }"
   true
 
-let%test "test_typecheck_43" = test_typecheck 
+let%test "test_typecheck_mapping_2" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       uint x;
@@ -610,7 +610,7 @@ let%test "test_typecheck_43" = test_typecheck
   }"
   false
 
-let%test "test_typecheck_44" = test_typecheck 
+let%test "test_typecheck_mapping_3" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       uint x;
@@ -619,41 +619,50 @@ let%test "test_typecheck_44" = test_typecheck
   }"
   false
 
-let%test "test_typecheck_45" = test_typecheck 
+let%test "test_typecheck_mapping_4" = test_typecheck 
   "contract C {
+      // mappings cannot be local variables
       function f() public { mapping (uint => uint) m; m[0] = 1; }
   }"
   false
 
-let%test "test_typecheck_46" = test_typecheck 
+let%test "test_typecheck_mapping_5" = try 
+  "contract C {
+      // mappings cannot be local variables
+      function f(mapping (uint => uint) m) public { m[0] = 1; }
+  }"
+  |> parse_contract |> typecheck_contract |> fun _ ->  false
+  with _ -> true
+
+let%test "test_typecheck_mapping_6" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       function f() public { m = 1; }
   }"
   false
 
-let%test "test_typecheck_47" = test_typecheck 
+let%test "test_typecheck_mapping_7" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       function f() public { m[0] = m; }
   }"
   false
 
-let%test "test_typecheck_48" = test_typecheck 
+let%test "test_typecheck_mapping_8" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       function f(int k) public { m[k] = 1; }
   }"
   false
 
-let%test "test_typecheck_49" = test_typecheck 
+let%test "test_typecheck_mapping_9" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       function f(int k) public { m[uint(k)] = 1; }
   }"
   true
 
-let%test "test_typecheck_50" = test_typecheck 
+let%test "test_typecheck_mapping_10" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       int x;
@@ -661,7 +670,7 @@ let%test "test_typecheck_50" = test_typecheck
   }"
   false
 
-let%test "test_typecheck_51" = test_typecheck 
+let%test "test_typecheck_mapping_11" = test_typecheck 
   "contract C {
       mapping (uint => uint) m;
       int x;
@@ -669,55 +678,56 @@ let%test "test_typecheck_51" = test_typecheck
   }"
   true
 
-let%test "test_typecheck_52" = test_typecheck 
+
+let%test "test_typecheck_immutable_1" = test_typecheck 
   "contract C {
       int immutable y;
       function f(int k) public { y = k; }
   }"
   false
 
-let%test "test_typecheck_53" = test_typecheck 
+let%test "test_typecheck_immutable_2" = test_typecheck 
   "contract C {
       int immutable y;
       function f(int k) public { if (k>0) y = k; else k = y; }
   }"
   false
 
-let%test "test_typecheck_54" = test_typecheck 
-  "contract C { address payable a; function f() public payable { a.transfer(address(this).balance); } }"
-  true
-
-let%test "test_typecheck_55" = test_typecheck 
-  "contract C { function f(address payable a) public payable { a.transfer(address(this).balance); } }"
-  true
-
-let%test "test_typecheck_56" = test_typecheck 
-  "contract C { address a; function f() public payable { a.transfer(address(this).balance); } }"
-  false
-
-let%test "test_typecheck_57" = test_typecheck 
-  "contract C { function f(address a) public payable { a.transfer(address(this).balance); } }"
-  false
-
-let%test "test_typecheck_58" = test_typecheck 
-  "contract C { uint x; address payable a; function f() public payable { a.transfer(x); } }"
-  true
-
-let%test "test_typecheck_59" = test_typecheck 
-  "contract C { int x; address payable a; function f() public payable { a.transfer(x); } }"
-  false
-
-let%test "test_typecheck_60" = test_typecheck 
-  "contract C {
-      uint immutable y;
-      function f() public { address(\"0\").transfer(y); }
-  }"
-  false
-
-let%test "test_typecheck_61" = test_typecheck 
+let%test "test_typecheck_immutable_3" = test_typecheck 
   "contract C {
       uint immutable y;
       constructor() { y = 7; }
   }"
   true
 
+
+let%test "test_typecheck_payable_1" = test_typecheck 
+  "contract C { address payable a; function f() public payable { a.transfer(address(this).balance); } }"
+  true
+
+let%test "test_typecheck_payable_2" = test_typecheck 
+  "contract C { function f(address payable a) public payable { a.transfer(address(this).balance); } }"
+  true
+
+let%test "test_typecheck_payable_3" = test_typecheck 
+  "contract C { address a; function f() public payable { a.transfer(address(this).balance); } }"
+  false
+
+let%test "test_typecheck_payable_4" = test_typecheck 
+  "contract C { function f(address a) public payable { a.transfer(address(this).balance); } }"
+  false
+
+let%test "test_typecheck_payable_5" = test_typecheck 
+  "contract C { uint x; address payable a; function f() public payable { a.transfer(x); } }"
+  true
+
+let%test "test_typecheck_payable_6" = test_typecheck 
+  "contract C { int x; address payable a; function f() public payable { a.transfer(x); } }"
+  false
+
+let%test "test_typecheck_addresscast_1" = test_typecheck 
+  "contract C {
+      uint immutable y;
+      function f() public { address(\"0\").transfer(y); }
+  }"
+  false
