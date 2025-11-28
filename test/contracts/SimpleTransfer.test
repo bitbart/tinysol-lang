@@ -4,7 +4,7 @@ faucet 0xA 100
 faucet 0xM 10
 faucet 0xB 0
 
-deploy 0xA:0xC("0xB") "test/SimpleTransfer.sol"
+deploy 0xA:0xC("0xB") "test/contracts/SimpleTransfer.sol"
 assert 0xC this.balance==0
 assert 0xA this.balance==100
 

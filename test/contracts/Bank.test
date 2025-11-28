@@ -1,7 +1,7 @@
 // unit testing bank.sol
 faucet 0xA 100
 faucet 0xB 100
-deploy 0xA:0xC() "test/bank.sol"
+deploy 0xA:0xC() "test/contracts/Bank.sol"
 
 0xA:0xC.deposit{value:20}()
 assert 0xA this.balance==80
