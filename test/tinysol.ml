@@ -208,6 +208,8 @@ let%test "test_trace_cmd_17" = test_trace_cmd
 let%test "test_trace_cmd_18" = test_trace_cmd
   ("{ uint x; uint y; y = 6; x = (y>5)?uint(y):1 + 3; skip; }", 3, "x", Int 6) 
 
+let%test "test_trace_cmd_19" = test_trace_cmd
+  ("{ uint x; x=1; { int x; x=x+1; { int x; x=x+2; } x=x+3; } x=x+4; skip; }", 8, "x", Int 5) 
 
 (********************************************************************************
  test_exec_tx : 
@@ -385,6 +387,29 @@ let%test "test_enum_6" = test_exec_tx
   }"
   ["0xA:0xC.f(0)"; "0xA:0xC.f(1)"; "0xA:0xC.f(2)"; "0xA:0xC.f(0)"] 
   ["s==State.Q1"]
+
+let%test "test_block_1" = test_exec_tx
+  "contract C {
+    uint y;
+    function f() public { 
+      uint x; x=1; { int x; x=x+1; { int x; x=x+2; } x=x+3; } x=x+4; y=x;
+    }
+  }"
+  ["0xA:0xC.f()"] 
+  ["y==5"]
+
+let%test "test_block_2" = test_exec_tx
+  "contract C {
+    uint x;
+    uint y;
+    uint z;
+    constructor() { x=100; y=200; }
+    function f(uint y) public { 
+      uint x; x=1; z=x; { int x; x=x+1; { int x; x=x+2; } x=x+3; z=z+x; } x=x+4; y=x;
+    }
+  }"
+  ["0xA:0xC.f(1)"] 
+  ["x==100 && y==200 && z==5"]
 
 
 let test_typecheck (src: string) (exp : bool)=
