@@ -2,9 +2,10 @@ open TinysolLib.Utils
 open TinysolLib.Static
 
 let test_typecheck (src: string) (exp : bool)=
-  let c = src |> parse_contract |> blockify_contract in 
-  try typecheck_contract c = exp
-  with _ -> not exp  
+  let c = src |> parse_contract |> preprocess_contract in 
+  match typecheck_contract c with
+    | Ok() -> exp
+    | _ -> not exp  
 
 let%test "test_typecheck_0" = test_typecheck 
   "contract C0 { }"

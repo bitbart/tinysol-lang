@@ -3,7 +3,7 @@ open TinysolLib.Sysstate
 open TinysolLib.Utils
 open TinysolLib.Cli
 open TinysolLib.Prettyprint
-
+open TinysolLib.Static
 ;;
 
 match Array.length(Sys.argv) with
@@ -19,9 +19,21 @@ match Array.length(Sys.argv) with
       |> string_of_trace |> print_string
     | _ -> print_newline())
 (* parse_contract *) 
-| 3 when Sys.argv.(1)="parse_contract" -> (match read_file Sys.argv.(2) with
+| 2 when Sys.argv.(1)="parse" -> (match read_line() with
+    | Some s when s<>"" -> s |> parse_contract |> string_of_contract |> print_string
+    | _ -> print_newline())
+| 3 when Sys.argv.(1)="parse" -> (match read_file Sys.argv.(2) with
       "" -> print_newline()
     | s -> s |> parse_contract |> string_of_contract |> print_string)
+(* typecheck contract*)
+| 2 when Sys.argv.(1)="typecheck" -> (match read_line() with
+    | Some s when s<>"" -> s |> parse_contract |> preprocess_contract |> typecheck_contract 
+             |> string_of_typecheck_result |> print_endline 
+    | _ -> print_newline())
+| 3 when Sys.argv.(1)="typecheck" -> (match read_file Sys.argv.(2) with
+      "" -> print_newline()
+    | s -> s |> parse_contract |> preprocess_contract |> typecheck_contract 
+             |> string_of_typecheck_result |> print_endline) 
 (* unittest *)
 | 3 when Sys.argv.(1)="unittest" ->
   Sys.argv.(2) |> read_lines 
@@ -31,8 +43,9 @@ match Array.length(Sys.argv) with
   |> string_of_sysstate [] |> print_string
 (* wrong usage *)      
 | _ -> print_string "Usage:
-  dune exec tinysol parse_cmd   : parses cmd in stdin
-  dune exec tinysol exec_cmd <n_steps>   : executes n_steps of cmd in stdin
-  dune exec tinysol parse_contract <file>   : parses contract in file
-  dune exec tinysol unittest <file> : executes CLI commands from file 
+  dune exec tinysol parse_cmd         : parses cmd in stdin
+  dune exec tinysol exec_cmd <n>      : executes n_steps of cmd in stdin
+  dune exec tinysol parse [<file>]    : parses contract in file or stdin
+  dune exec tinysol typecheck [<file>]: typechecks contract in file or stdin
+  dune exec tinysol unittest <file>   : executes CLI commands from file 
 "

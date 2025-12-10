@@ -17,11 +17,11 @@ contract C1 {
 
     function f2(address a) public {
         if (address(this).balance > 0)
-            a.transfer(1);
+            payable(a).transfer(1);
     }
 
     function f3(uint amt) public {
         if (address(this).balance < 8) b=false;
-        else msg.sender.transfer(amt);
+        else payable(msg.sender).transfer(amt);
     }
 }
