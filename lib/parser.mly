@@ -65,6 +65,8 @@ open Cli_ast
 %token PRIVATE
 %token INTERNAL
 %token EXTERNAL
+%token VIEW
+%token PURE
 %token PAYABLE
 %token IMMUTABLE
 %token RETURNS 
@@ -194,10 +196,6 @@ opt_id:
   | ID { }
   | /* empty */ { }
 
-opt_payable:
-  | PAYABLE { true }
-  | /* empty */ { false }
-
 opt_immutable:
   | IMMUTABLE { true }
   | /* empty */ { false }
@@ -213,9 +211,17 @@ visibility_t:
   | EXTERNAL  { External }
 ;
 
+opt_var_visibility_t:
+  | v = visibility_t { v }
+  | /* default */ { Internal }
+
+opt_var_modifiers:
+  | v = opt_var_visibility_t; i = opt_immutable { (v,i) }
+  | i = opt_immutable v = opt_var_visibility_t; { (v,i) }
+
 var_decl:
-  | t = var_type; i = opt_immutable; x = ID { { ty = t; name = x; visibility = Internal; immutable=i; } }
-  | t = ID; i = opt_immutable; x = ID { { ty = VarT(CustomBT(t)); name = x; visibility = Internal; immutable = i; } }
+  | t = var_type; v_i = opt_var_modifiers; x = ID { { ty = t; name = x; visibility = fst v_i; immutable = snd v_i; } }
+  | t = ID; v_i = opt_var_modifiers; x = ID { { ty = VarT(CustomBT(t)); name = x; visibility = fst v_i; immutable = snd v_i; } }
 ;
 
 local_var_decl:
@@ -261,12 +267,26 @@ opt_cmd:
   | c = cmd { c}
   | { Skip }
 
+opt_mutability_t:
+  | PURE { Pure }
+  | VIEW { View }
+  | PAYABLE { Payable }
+  | /* default */ { NonPayable }
+
+opt_payable:
+  | PAYABLE { true }
+  | /* empty */ { false }
+
+fun_modifiers:
+  | v = visibility_t; m = opt_mutability_t { (v,m) }
+  | m = opt_mutability_t; v = visibility_t { (v,m) }
+
 fun_decl:
   /* constructor(al) payable? { c } */ 
-  | CONSTR; LPAREN; al = formal_args; RPAREN; p = opt_payable; LBRACE; c = opt_cmd; RBRACE { Constr(al,c,p) }
+  | CONSTR; LPAREN; al = formal_args; RPAREN; m = opt_mutability_t; LBRACE; c = opt_cmd; RBRACE { Constr(al,c,m) }
   /* function f(al) [public|private]? payable? returns(r)? { c } */
-  | FUN; f = ID; LPAREN; al = formal_args; RPAREN; v=visibility_t; p = opt_payable; r = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc(f,al,c,v,p,r) }
-  | RECEIVE; LPAREN; al = formal_args; RPAREN; v=visibility_t; p = opt_payable; r = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc("receive",al,c,v,p,r) }
+  | FUN; f = ID; LPAREN; al = formal_args; RPAREN; fmod = fun_modifiers; ret = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc(f,al,c,fst fmod,snd fmod,ret) }
+  | RECEIVE; LPAREN; al = formal_args; RPAREN; fmod = fun_modifiers; ret = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc("receive",al,c,fst fmod,snd fmod,ret) }
 ;
 
 formal_args:

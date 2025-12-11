@@ -178,7 +178,7 @@ and blockify_subterms = function
 
 let blockify_fun = function
   | Constr (al,c,p) -> Constr (al,blockify_cmd c,p)
-  | Proc (f,al,c,v,p,r) -> Proc(f,al,blockify_cmd c,v,p,r)
+  | Proc (f,al,c,v,m,ret) -> Proc(f,al,blockify_cmd c,v,m,ret)
 
 let blockify_contract (Contract(c,el,vdl,fdl)) =
   Contract(c,el,vdl,List.map blockify_fun fdl)
@@ -214,7 +214,7 @@ let rec enumify_cmd enums = function
 
 let enumify_fun enums = function
   | Constr (al,c,p) -> Constr (enumify_local_decls enums al,enumify_cmd enums c,p)
-  | Proc (f,al,c,v,p,r) -> Proc(f,enumify_local_decls enums al,enumify_cmd enums c,v,p,r)
+  | Proc (f,al,c,v,m,ret) -> Proc(f,enumify_local_decls enums al,enumify_cmd enums c,v,m,ret)
 
 let enumify_contract (Contract(c,enums,vdl,fdl)) =
   Contract(c,enums,enumify_decls enums vdl, List.map (fun fd -> enumify_fun enums fd) fdl)

@@ -577,3 +577,47 @@ let%test "test_typecheck_enum_5" = test_typecheck
 let%test "test_typecheck_enum_6" = test_typecheck
   "contract C { enum E1 {A1,B1} enum E2 {A2,B2} enum E1 {A1,B1} E1 s; function f() public { s = E1.A1; } }"
   false
+
+let%test "test_typecheck_mutability_1" = test_typecheck
+  "contract C {
+      uint x;
+      function f() public { x = 1; }
+  }"
+  true
+
+let%test "test_typecheck_mutability_2" = test_typecheck
+  "contract C {
+      uint x;
+      function f() public view { x = 1; }
+  }"
+  false (* f cannot be declared as view because it (potentially) modifies the state *)
+
+let%test "test_typecheck_mutability_3" = test_typecheck
+  "contract C {
+      uint x;
+      function f(uint y) public pure { int z; z = x*y; }
+  }"
+  false (* f cannot be declared as pure because it (potentially) depends on the state *)
+
+let%test "test_typecheck_mutability_4" = test_typecheck
+  "contract C {
+      uint x;
+      function f(int y) public pure { int z; z = y*y; }
+  }"
+  false (* f cannot be declared as pure because it (potentially) depends on the state *)
+
+let%test "test_typecheck_mutability_5" = test_typecheck
+  "contract C {
+    int x;
+    constructor() { x = 1; }
+    function f() public { require(msg.value == 0); x = 2; }
+  }"
+  false (* msg.value can only be used in payable functions *)
+
+let%test "test_typecheck_mutability_6" = test_typecheck
+  "contract C {
+    int x;
+    constructor() { x = 1; }
+    function f() public payable { require(msg.value == 0); x = 2; }
+  }"
+  true

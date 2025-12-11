@@ -80,6 +80,12 @@ let string_of_visibility = function
   | Internal  -> "internal"
   | External  -> "external"
 
+let string_of_mutability = function
+  | Pure    -> "pure"
+  | View    -> "view"
+  | NonPayable -> ""
+  | Payable -> "payable"
+
 let string_of_args = List.fold_left (fun s a -> s ^ (if s<>"" then "," else "") ^ (string_of_exprval a)) ""
 
 let rec string_of_expr = function
@@ -171,16 +177,18 @@ let string_of_local_var_decls = List.fold_left (fun s d -> s ^ (if s<>"" then ";
 
 let string_of_fun_args = List.fold_left (fun s d -> s ^ (if s<>"" then ", " else "") ^ string_of_local_var_decl d) ""
 
+let add_space w = if w="" then "" else w ^ " "
+
 let string_of_fun_decl = function 
-  | Proc(f,al,c,v,p,r) -> 
+  | Proc(f,al,c,v,m,ret) -> 
     "function " ^ f ^ "(" ^ (string_of_fun_args al) ^ ") " ^
-    string_of_visibility v ^ " " ^
-    (if p then "payable " else "") ^
-    (match r with None -> "" | Some t -> "returns(" ^ string_of_base_type t ^ ") ") ^ 
+    add_space (string_of_visibility v) ^
+    add_space (string_of_mutability m) ^ 
+    (match ret with None -> "" | Some t -> "returns(" ^ string_of_base_type t ^ ") ") ^ 
     "{" ^ string_of_cmd c ^ "}\n"
-  | Constr(al,c,p) ->       
+  | Constr(al,c,m) ->       
     "constructor " ^ "(" ^ (string_of_fun_args al) ^ ") " ^
-    (if p then "payable " else "") ^ 
+    add_space (string_of_mutability m) ^ 
     "{" ^ string_of_cmd c ^ "}\n"
 
 let string_of_fun_decls = List.fold_left (fun s d -> s ^ (if s<>"" then "  " else " ") ^ string_of_fun_decl d) ""

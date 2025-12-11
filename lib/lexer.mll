@@ -74,6 +74,8 @@ rule read_token =
   | "private" { PRIVATE }
   | "internal" { INTERNAL }
   | "external" { EXTERNAL }
+  | "view" { VIEW }
+  | "pure" { PURE }
   | "payable" { PAYABLE }
   | "immutable" { IMMUTABLE }
   | "returns" { RETURNS }

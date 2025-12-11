@@ -549,9 +549,9 @@ let exec_tx (n_steps : int) (tx: transaction) (st : sysstate) : (sysstate,string
             callstack = st.callstack;
             blocknum = 0;
             active = tx.txto :: st.active }
-      | Some (Proc(_,xl,c,_,p,_))
-      | Some (Constr(xl,c,p)) ->
-          if not p && tx.txvalue>0 then 
+      | Some (Proc(_,xl,c,_,m,_))
+      | Some (Constr(xl,c,m)) ->
+          if m<>Payable && tx.txvalue>0 then 
             Error "sending ETH to a non-payable function"
         else
           let xl',vl' =

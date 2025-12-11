@@ -83,6 +83,12 @@ and visibility_t =
   | Internal
   | External
 
+and mutability_t = 
+  | Payable
+  | NonPayable
+  | View
+  | Pure
+
 (* a variable declaration (t,x) consists of:
    - a type t
    - an identifier x of the variable
@@ -90,7 +96,7 @@ and visibility_t =
    - a bool i telling whether the variable is mutable (i=false) or immutable (i=true)
  *)
 
-(* Visilibility modifiers *)
+(* Visibility modifiers *)
 
 and var_decl = { ty: var_type; name: ide; visibility: visibility_t; immutable: bool }
 
@@ -101,9 +107,9 @@ and local_var_decl = { ty: var_type; name: ide; }
   - functions can be either public or private, and they can be payable
  *)
 
-and fun_decl =
-  | Constr of local_var_decl list * cmd * bool (* payable *)
-  | Proc of ide * local_var_decl list * cmd * visibility_t * bool * (base_type option) 
+type fun_decl =
+  | Constr of local_var_decl list * cmd * mutability_t
+  | Proc of ide * local_var_decl list * cmd * visibility_t * mutability_t * (base_type option) 
 
 type enum_decl = Enum of (ide * ide list)
 
