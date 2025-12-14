@@ -79,7 +79,15 @@ let%test "test_parse_contract_2" = try
   parse_contract
   "contract C { uint x; function f() public { x = block.number; } }"
   = 
-  (Contract ("C", [], [{ ty=VarT(UintBT); name="x"; visibility=Internal; immutable=false }],
+  (Contract ("C", [], [{ ty=VarT(UintBT); name="x"; visibility=Internal; mutability=Mutable; init_value = None }],
+  [Proc ("f", [], Assign ("x", BlockNum), Public, NonPayable, None)]))
+  with _ -> false
+
+let%test "test_parse_contract_3" = try
+  parse_contract
+  "contract C { uint immutable private x; function f() public { x = block.number; } }"
+  = 
+  (Contract ("C", [], [{ ty=VarT(UintBT); name="x"; visibility=Private; mutability=Immutable; init_value = None }],
   [Proc ("f", [], Assign ("x", BlockNum), Public, NonPayable, None)]))
   with _ -> false
 
@@ -154,4 +162,20 @@ let%test "test_parse_contract_15" = test_parse
 
 let%test "test_parse_contract_16" = test_parse
   "contract C { function f() view payable { } }"
+  false
+
+let%test "test_parse_contract_17" = test_parse
+  "contract C { int constant N=1; }"
+  true
+
+let%test "test_parse_contract_18" = test_parse
+  "contract C { int constant immutable N=1; }"
+  false
+
+let%test "test_parse_contract_19" = test_parse
+  "contract C { int private immutable N=1; }"
+  false
+
+let%test "test_parse_contract_19" = test_parse
+  "contract C { int public constant N=1; }"
   false

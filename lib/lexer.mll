@@ -78,6 +78,7 @@ rule read_token =
   | "pure" { PURE }
   | "payable" { PAYABLE }
   | "immutable" { IMMUTABLE }
+  | "constant" { CONSTANT }
   | "returns" { RETURNS }
   | "faucet" { FAUCET }
   | "deploy" { DEPLOY }

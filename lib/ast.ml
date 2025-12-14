@@ -75,6 +75,8 @@ and base_type =
   - a mapping from a base type to another base type
 *)
 
+(* Exprval: values associated to (contract and local) variables *)
+
 and var_type = VarT of base_type | MapT of base_type * base_type
 
 and visibility_t = 
@@ -83,22 +85,40 @@ and visibility_t =
   | Internal
   | External
 
-and mutability_t = 
+and fun_mutability_t = 
   | Payable
   | NonPayable
   | View
   | Pure
 
+and var_mutability_t = 
+  | Constant
+  | Immutable
+  | Mutable
+
+and exprval = 
+  | Bool of bool 
+  | Int of int
+  | Uint of int
+  | Addr of string
+  | Map of (exprval -> exprval)
+
 (* a variable declaration (t,x) consists of:
    - a type t
    - an identifier x of the variable
    - a variable visibility modifier (default is internal)
-   - a bool i telling whether the variable is mutable (i=false) or immutable (i=true)
+   - a variable mutability modifier (default is muitable)
  *)
 
 (* Visibility modifiers *)
 
-and var_decl = { ty: var_type; name: ide; visibility: visibility_t; immutable: bool }
+and var_decl = { 
+  ty: var_type; 
+  name: ide; 
+  visibility: visibility_t; 
+  mutability: var_mutability_t; 
+  init_value: exprval option 
+}
 
 and local_var_decl = { ty: var_type; name: ide; }
 
@@ -108,8 +128,8 @@ and local_var_decl = { ty: var_type; name: ide; }
  *)
 
 type fun_decl =
-  | Constr of local_var_decl list * cmd * mutability_t
-  | Proc of ide * local_var_decl list * cmd * visibility_t * mutability_t * (base_type option) 
+  | Constr of local_var_decl list * cmd * fun_mutability_t
+  | Proc of ide * local_var_decl list * cmd * visibility_t * fun_mutability_t * (base_type option) 
 
 type enum_decl = Enum of (ide * ide list)
 
@@ -125,15 +145,6 @@ type contract = Contract of ide * enum_decl list * var_decl list * fun_decl list
 (******************************************************************************)
 (*                                   Transactions                             *)
 (******************************************************************************)
-
-(* Exprval: values associated to (contract and local) variables *)
-
-type exprval = 
-  | Bool of bool 
-  | Int of int
-  | Uint of int
-  | Addr of string
-  | Map of (exprval -> exprval)
 
 (* Transactions contain:
  - txsender: the address of the transaction sender (either an EOA or a contract address)

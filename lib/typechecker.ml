@@ -367,7 +367,7 @@ let rec typecheck_expr (edl : enum_decl list) vdl = function
   | ExecFunCall(_) -> assert(false) (* this should not happen at static time *)
 
 let is_immutable (x : ide) (vdl : var_decl list) = 
-  List.fold_left (fun acc (vd : var_decl) -> acc || (vd.name=x && vd.immutable)) false vdl
+  List.fold_left (fun acc (vd : var_decl) -> acc || (vd.name=x && vd.mutability<>Mutable)) false vdl
 
 let typecheck_local_decls (vdl : local_var_decl list) = List.fold_left
   (fun acc vd -> match vd.ty with 

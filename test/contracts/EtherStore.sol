@@ -16,8 +16,4 @@ contract EtherStore {
         payable(msg.sender).transfer(bal);
         balances[msg.sender] = 0;
     }
-
-    function getBalance() public view returns (uint) {
-        return address(this).balance;
-    }
 }

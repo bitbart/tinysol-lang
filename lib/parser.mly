@@ -69,6 +69,7 @@ open Cli_ast
 %token PURE
 %token PAYABLE
 %token IMMUTABLE
+%token CONSTANT
 %token RETURNS 
 
 %token FAUCET
@@ -142,7 +143,7 @@ value:
   | TRUE { Bool true }
   | FALSE { Bool false }
 
-opt_value:
+opt_weivalue:
   | LBRACE; VALUE; COLON; e_value = expr; RBRACE; { e_value }
   | { IntConst 0 }
 
@@ -155,7 +156,7 @@ expr:
   | e = expr; DOT; BALANCE { BalanceOf(e) }
   | e = expr; DOT; o = ID { match e with Var(x) -> EnumOpt(x,o) | _ -> failwith "enum parser error"}
   | e1 = expr; LPAREN; e2 = expr; RPAREN { match e1 with Var(x) -> EnumCast(x,e2) | _ -> failwith "enum parser error"}
-  | e_to = expr; DOT; f = ID; e_value = opt_value; LPAREN; e_args = separated_list(ARGSEP, expr); RPAREN { FunCall(e_to,f,e_value,e_args) }
+  | e_to = expr; DOT; f = ID; e_value = opt_weivalue; LPAREN; e_args = separated_list(ARGSEP, expr); RPAREN { FunCall(e_to,f,e_value,e_args) }
   | TRUE { BoolConst true }
   | FALSE { BoolConst false }
   | BLOCKNUM { BlockNum }
@@ -196,10 +197,6 @@ opt_id:
   | ID { }
   | /* empty */ { }
 
-opt_immutable:
-  | IMMUTABLE { true }
-  | /* empty */ { false }
-
 var_type:
   | t = base_type; { VarT(t) }
   | MAPPING; LPAREN; t1 = base_type; opt_id; MAPSTO; t2 = base_type; opt_id; RPAREN { MapT(t1,t2) }
@@ -215,13 +212,22 @@ opt_var_visibility_t:
   | v = visibility_t { v }
   | /* default */ { Internal }
 
-opt_var_modifiers:
-  | v = opt_var_visibility_t; i = opt_immutable { (v,i) }
-  | i = opt_immutable v = opt_var_visibility_t; { (v,i) }
+opt_var_mutability_t:
+  | CONSTANT { Constant }
+  | IMMUTABLE { Immutable }
+  | /* default */ { Mutable }
 
+opt_var_modifiers:
+  | v = opt_var_visibility_t; m = opt_var_mutability_t { (v,m) }
+  | m = opt_var_mutability_t v = opt_var_visibility_t; { (v,m) }
+
+opt_init_value:
+  | TAKES; v = value; { Some v }
+  | /* default */ { None }
+  
 var_decl:
-  | t = var_type; v_i = opt_var_modifiers; x = ID { { ty = t; name = x; visibility = fst v_i; immutable = snd v_i; } }
-  | t = ID; v_i = opt_var_modifiers; x = ID { { ty = VarT(CustomBT(t)); name = x; visibility = fst v_i; immutable = snd v_i; } }
+  | t = var_type; v_i = opt_var_modifiers; x = ID; iv = opt_init_value { { ty = t; name = x; visibility = fst v_i; mutability = snd v_i; init_value = iv } }
+  | t = ID; v_i = opt_var_modifiers; x = ID { { ty = VarT(CustomBT(t)); name = x; visibility = fst v_i; mutability = snd v_i; init_value = None } }
 ;
 
 local_var_decl:
@@ -241,7 +247,7 @@ nonseq_cmd:
   | x = ID; LSQUARE; ek = expr; RSQUARE; SUBTAKES; ev = expr; CMDSEP; { MapW(x,ek,Sub(MapR(Var x,ek),ev)) }
   | rcv = expr; DOT; TRANSFER; LPAREN; amt=expr; RPAREN; CMDSEP; { Send(rcv,amt) }
   | vd = local_var_decl; CMDSEP; { Decl(vd) }
-  | e_to = expr; DOT; f = ID; e_value = opt_value; LPAREN; e_args = separated_list(ARGSEP, expr); RPAREN; CMDSEP; { ProcCall(e_to,f,e_value,e_args) }
+  | e_to = expr; DOT; f = ID; e_value = opt_weivalue; LPAREN; e_args = separated_list(ARGSEP, expr); RPAREN; CMDSEP; { ProcCall(e_to,f,e_value,e_args) }
 ;
 
 cmd:
@@ -251,7 +257,7 @@ cmd:
   | IF LPAREN; e = expr; RPAREN; LBRACE; c1 = cmd; RBRACE; ELSE c2 = nonseq_cmd { If(e,c1,c2) }
   | IF LPAREN; e = expr; RPAREN; c1 = nonseq_cmd; ELSE LBRACE; c2 = cmd; RBRACE; { If(e,c1,c2) }
   | IF LPAREN; e = expr; RPAREN; LBRACE; c1 = cmd; RBRACE; ELSE; LBRACE; c2 = cmd; RBRACE { If(e,c1,c2) }
-  | IF LPAREN; e = expr; RPAREN; c1 = nonseq_cmd { If(e,c1,Skip) }
+  | IF LPAREN; e = expr; RPAREN; c1 = cmd { If(e,c1,Skip) }
   | LBRACE; c = cmd; RBRACE { Block([], c) }
 ;
 
@@ -267,7 +273,7 @@ opt_cmd:
   | c = cmd { c}
   | { Skip }
 
-opt_mutability_t:
+opt_fun_mutability_t:
   | PURE { Pure }
   | VIEW { View }
   | PAYABLE { Payable }
@@ -278,12 +284,12 @@ opt_payable:
   | /* empty */ { false }
 
 fun_modifiers:
-  | v = visibility_t; m = opt_mutability_t { (v,m) }
-  | m = opt_mutability_t; v = visibility_t { (v,m) }
+  | v = visibility_t; m = opt_fun_mutability_t { (v,m) }
+  | m = opt_fun_mutability_t; v = visibility_t { (v,m) }
 
 fun_decl:
   /* constructor(al) payable? { c } */ 
-  | CONSTR; LPAREN; al = formal_args; RPAREN; m = opt_mutability_t; LBRACE; c = opt_cmd; RBRACE { Constr(al,c,m) }
+  | CONSTR; LPAREN; al = formal_args; RPAREN; m = opt_fun_mutability_t; LBRACE; c = opt_cmd; RBRACE { Constr(al,c,m) }
   /* function f(al) [public|private]? payable? returns(r)? { c } */
   | FUN; f = ID; LPAREN; al = formal_args; RPAREN; fmod = fun_modifiers; ret = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc(f,al,c,fst fmod,snd fmod,ret) }
   | RECEIVE; LPAREN; al = formal_args; RPAREN; fmod = fun_modifiers; ret = opt_returns; LBRACE; c = opt_cmd; RBRACE { Proc("receive",al,c,fst fmod,snd fmod,ret) }
@@ -299,19 +305,19 @@ formal_arg:
   | ADDR; p = opt_payable; x = ID { { ty = VarT(AddrBT(p)); name = x; } }
 ;
 
-opt_value_tx:
+opt_weivalue_tx:
   | LBRACE; VALUE; COLON; n = CONST; RBRACE; { int_of_string n }
   | { 0 }
 
 transaction:
-  | s = ADDRLIT; COLON; c = ADDRLIT; v = opt_value_tx; LPAREN; al = actual_args; RPAREN 
+  | s = ADDRLIT; COLON; c = ADDRLIT; v = opt_weivalue_tx; LPAREN; al = actual_args; RPAREN 
   { { txsender = s;
       txto = c;
       txfun = "constructor";
       txargs = al;
       txvalue = v;
   } }
-  | s = ADDRLIT; COLON; c = ADDRLIT; DOT; f = ID; v = opt_value_tx; LPAREN; al = actual_args; RPAREN 
+  | s = ADDRLIT; COLON; c = ADDRLIT; DOT; f = ID; v = opt_weivalue_tx; LPAREN; al = actual_args; RPAREN 
   { { txsender = s;
       txto = c;
       txfun = f;

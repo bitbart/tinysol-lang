@@ -446,7 +446,7 @@ let rec eval_expr (st : sysstate) (e : expr) : exprval =
   if is_val e then exprval_of_expr e
   else let (e', st') = step_expr (e, st) in eval_expr st' e'  
 
-let default_value = function 
+let default_var_value = function 
 | IntBT       -> Int 0
 | UintBT      -> Uint 0
 | BoolBT      -> Bool false
@@ -454,11 +454,14 @@ let default_value = function
 | CustomBT _  -> Addr "0"
 | EnumBT _    -> Uint 0
 
+(* initialized the contract storage upon deployment *)
 let init_storage (Contract(_,_,vdl,_)) : ide -> exprval =
   List.fold_left (fun acc (vd : var_decl) -> 
     let (x,v) = (match vd.ty with 
-      | VarT(t)     -> (vd.name, default_value t)
-      | MapT(_,tv)  -> (vd.name, Map (fun _ -> (default_value tv)))
+      | VarT(t)     -> (vd.name, match vd.init_value with 
+          | None -> default_var_value t 
+          | Some v -> v)
+      | MapT(_,tv)  -> (vd.name, Map (fun _ -> (default_var_value tv)))
     )
     in bind x v acc) 
   botenv 
@@ -521,7 +524,7 @@ let exec_tx (n_steps : int) (tx: transaction) (st : sysstate) : (sysstate,string
   else try (
     let (sender_state : account_state) = 
       { (st.accounts tx.txsender) with balance = (st.accounts tx.txsender).balance - tx.txvalue } in
-    (* sets state of to address. If not created yet, deploys the contract *)
+    (* updates state of "to" address. If not created yet, deploys the contract *)
     let (to_state : account_state),(deploy : bool) = 
       if exists_account st tx.txto 
       then    { (st.accounts tx.txto) with balance = (st.accounts tx.txto).balance + tx.txvalue }, 
@@ -534,6 +537,7 @@ let exec_tx (n_steps : int) (tx: transaction) (st : sysstate) : (sysstate,string
             with _ -> failwith ("exec_tx: syntax error in contract code: " ^ code))
         | _ -> failwith "exec_tx: the first parameter of a deploy transaction must be the contract code")
     in
+    (* executes the called function *)
     match to_state.code with
     | None -> Error "Called address is not a contract"
     | Some src -> (match find_fun_in_contract src tx.txfun with

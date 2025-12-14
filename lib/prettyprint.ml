@@ -67,6 +67,8 @@ let vars_of_contract (Contract(_,_,vdl,_)) : ide list =
 (*                         Converting syntax to strings                       *)
 (******************************************************************************)
 
+let add_space w = if w="" then "" else w ^ " "
+
 let string_of_exprval = function
     Bool b -> string_of_bool b
   | Int n
@@ -80,11 +82,16 @@ let string_of_visibility = function
   | Internal  -> "internal"
   | External  -> "external"
 
-let string_of_mutability = function
+let string_of_fun_mutability = function
   | Pure    -> "pure"
   | View    -> "view"
   | NonPayable -> ""
   | Payable -> "payable"
+
+let string_of_var_mutability = function
+  | Constant    -> "constant"
+  | Immutable   -> "immutable"
+  | Mutable     -> ""
 
 let string_of_args = List.fold_left (fun s a -> s ^ (if s<>"" then "," else "") ^ (string_of_exprval a)) ""
 
@@ -161,11 +168,16 @@ and string_of_var_type = function
 | VarT(t) -> string_of_base_type t
 | MapT(tk,tv) -> "mapping (" ^ string_of_base_type tk ^ " => " ^ string_of_base_type tv ^ ")"
 
+and string_of_init_value = function
+  None -> ""
+| Some v -> " = " ^ string_of_exprval v
+
 and string_of_var_decl (vd : var_decl) : string = 
-  string_of_var_type vd.ty ^ " " ^ 
-  string_of_visibility vd.visibility ^ " " ^ 
-  (if vd.immutable then "immutable " else "") ^
-  vd.name
+  add_space (string_of_var_type vd.ty) ^ 
+  add_space (string_of_visibility vd.visibility) ^ 
+  add_space (string_of_var_mutability vd.mutability) ^
+  vd.name ^
+  (string_of_init_value vd.init_value)
 
 and string_of_local_var_decl (vd : local_var_decl) : string = 
   string_of_var_type vd.ty ^ " " ^ 
@@ -177,18 +189,16 @@ let string_of_local_var_decls = List.fold_left (fun s d -> s ^ (if s<>"" then ";
 
 let string_of_fun_args = List.fold_left (fun s d -> s ^ (if s<>"" then ", " else "") ^ string_of_local_var_decl d) ""
 
-let add_space w = if w="" then "" else w ^ " "
-
 let string_of_fun_decl = function 
   | Proc(f,al,c,v,m,ret) -> 
     "function " ^ f ^ "(" ^ (string_of_fun_args al) ^ ") " ^
     add_space (string_of_visibility v) ^
-    add_space (string_of_mutability m) ^ 
+    add_space (string_of_fun_mutability m) ^ 
     (match ret with None -> "" | Some t -> "returns(" ^ string_of_base_type t ^ ") ") ^ 
     "{" ^ string_of_cmd c ^ "}\n"
   | Constr(al,c,m) ->       
     "constructor " ^ "(" ^ (string_of_fun_args al) ^ ") " ^
-    add_space (string_of_mutability m) ^ 
+    add_space (string_of_fun_mutability m) ^ 
     "{" ^ string_of_cmd c ^ "}\n"
 
 let string_of_fun_decls = List.fold_left (fun s d -> s ^ (if s<>"" then "  " else " ") ^ string_of_fun_decl d) ""
