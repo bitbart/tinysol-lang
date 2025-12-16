@@ -8,10 +8,14 @@ assert 0xA this.balance==50
 assert 0xC this.balance==50
 assert 0xZ this.balance==0
 
-revert 0xA:0xC.finalize()
-block.number = 10001
+0xA:0xC.finalize()
+assert lastReverted
 
+block.number = 1001
 0xB:0xC.cancel()
+assert !lastReverted
 
-revert 0xA:0xC.finalize()
+0xA:0xC.finalize()
+assert lastReverted
+
 assert 0xC this.balance==50

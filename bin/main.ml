@@ -39,7 +39,7 @@ match Array.length(Sys.argv) with
   Sys.argv.(2) |> read_lines 
   |> List.filter (fun s -> not (is_empty_or_comment s)) 
   |> List.map parse_cli_cmd 
-  |> fun l -> exec_cli_cmd_list true l (init_sysstate)
+  |> fun l -> snd (exec_cli_cmd_list true l (init_sysstate))
   |> string_of_sysstate [] |> print_string
 (* wrong usage *)      
 | _ -> print_string "Usage:

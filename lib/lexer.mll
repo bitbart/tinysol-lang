@@ -83,7 +83,7 @@ rule read_token =
   | "faucet" { FAUCET }
   | "deploy" { DEPLOY }
   | "assert" { ASSERT }
-  | "revert" { REVERT }
+  | "lastReverted" { LASTREVERTED }
   | "block.number" { BLOCKNUM }
   | "pragma" { PRAGMA }
   | "^" { CARET }

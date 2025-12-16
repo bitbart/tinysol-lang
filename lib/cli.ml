@@ -2,6 +2,7 @@
 (*                                    Tinysol CLI                             *)
 (******************************************************************************)
 
+open Ast
 open Cli_ast
 open Utils
 open Sysstate
@@ -13,7 +14,9 @@ let string_of_cli_cmd = function
   | Deploy(tx,filename) -> "deploy " ^ string_of_transaction tx ^ " " ^ filename
   | CallFun tx -> string_of_transaction tx
   | Revert tx -> "revert " ^ string_of_transaction tx
-  | Assert(a,e) -> "assert " ^ a ^ " " ^ string_of_expr e 
+  | Assert(a,e) -> "assert " ^ a ^ " " ^ string_of_expr e
+  | LastReverted -> "lastReverted"
+  | NotLastReverted -> "!lastReverted" 
   | SetBlockNum(n) -> "block.number = " ^ string_of_int n
 
 let is_empty_or_comment (s : string) =
@@ -28,10 +31,12 @@ let is_empty_or_comment (s : string) =
   skip 0
 
 let is_assert = function 
-  | Assert(_) -> true
+  | Assert _ 
+  | LastReverted 
+  | NotLastReverted -> true
   | _ -> false
 
-let exec_cli_cmd (cc : cli_cmd) (st : sysstate) : sysstate = match cc with
+let exec_cli_cmd (cc : cli_cmd) (lastReverted : bool) (st : sysstate) : sysstate = match cc with
   | Faucet(a,n) -> faucet a n st
   | Deploy(tx,filename) -> 
       let src = filename |> read_file 
@@ -47,16 +52,21 @@ let exec_cli_cmd (cc : cli_cmd) (st : sysstate) : sysstate = match cc with
     (match eval_expr { st with callstack = [{callee = a; locals = []}] } e with
     | Bool true -> st
     | _ -> failwith ("assertion violation: " ^ string_of_cli_cmd cc)) 
+  | LastReverted -> if lastReverted then st else failwith "lastReverted" 
+  | NotLastReverted -> if (not lastReverted) then st else failwith "!lastReverted"
   | SetBlockNum(n) -> { st with blocknum = n }
 
 let exec_cli_cmd_list (verbose : bool) (ccl : cli_cmd list) (st : sysstate) = 
   List.fold_left 
-  (fun sti cc -> 
+  (fun (lastReverted,sti) cc -> 
     if verbose && not (is_assert cc) then 
       print_endline (string_of_sysstate [] sti ^ "\n--- " ^ string_of_cli_cmd cc ^ " --->")
     else ();  
     try 
-      exec_cli_cmd cc sti
-    with ex -> print_endline (string_of_sysstate [] sti); raise ex)
-  st
+      (false, exec_cli_cmd cc lastReverted sti)
+    with ex -> 
+      let _ = print_endline (Printexc.to_string ex) in
+      (true, sti)
+  )
+  (false, st)
   ccl

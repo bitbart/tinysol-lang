@@ -75,7 +75,7 @@ open Cli_ast
 %token FAUCET
 %token DEPLOY
 %token ASSERT
-%token REVERT
+%token LASTREVERTED
 %token BLOCKNUM
 
 %token PRAGMA
@@ -341,9 +341,10 @@ transaction:
 
 cli_cmd:
   | tx = transaction { CallFun tx }
-  | REVERT; tx = transaction { Revert tx }
   | FAUCET; a = ADDRLIT; n = CONST { Faucet(a, int_of_string n) }
   | DEPLOY; tx = transaction; filename = STRING { Deploy(tx,filename) }
-  | ASSERT; a = ADDRLIT; e = expr_eof; { Assert(a,e) }
+  | ASSERT; a = ADDRLIT; e = expr; EOF; { Assert(a,e) }
+  | ASSERT; LASTREVERTED { LastReverted }
+  | ASSERT; NOT; LASTREVERTED { NotLastReverted }
   | BLOCKNUM; TAKES; n = CONST; { SetBlockNum(int_of_string n) }
 ;

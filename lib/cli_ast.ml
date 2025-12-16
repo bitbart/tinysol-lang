@@ -10,4 +10,6 @@ type cli_cmd =
   | CallFun of transaction
   | Revert of transaction
   | Assert of addr * expr
+  | LastReverted 
+  | NotLastReverted 
   | SetBlockNum of int

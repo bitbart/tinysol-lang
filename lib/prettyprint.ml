@@ -280,6 +280,7 @@ let string_of_account_state accst =
 let string_of_accounts (st : sysstate) =
   "[" ^ 
   (List.fold_left (fun acc a -> acc ^ a ^ " -> " ^ (string_of_account_state (st.accounts a)) ^ " ") "" st.active) ^ 
+  (if st.blocknum<>0 then "block.number = " ^ string_of_int st.blocknum else "") ^
   "]"
 
 let string_of_frame (f : frame) (vl : ide list)=
