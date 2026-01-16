@@ -94,6 +94,35 @@ let rec step_expr (e,st) = match e with
     let (e2', st') = step_expr (e2, st) in (Mul(e1,e2'), st')
   | Mul(e1,e2) -> 
     let (e1', st') = step_expr (e1, st) in (Mul(e1',e2), st')
+  
+    
+  | Div(e1,e2) when is_val e1 && is_val e2 -> (match e1,e2 with
+    | (IntConst n1, IntConst n2) -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (IntConst (n1/n2), st)
+    | (IntConst n1, UintVal n2) when n1>=0 -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (UintVal (n1/n2), st)
+    | (UintVal n1, IntConst n2) when n2>=0 -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (UintVal (n1/n2), st)
+    | (IntConst n1, IntVal n2) -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (IntVal (n1/n2), st)
+    | (IntVal n1, IntConst n2) -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (IntVal (n1/n2), st)
+    | (UintVal n1, UintVal n2) -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (UintVal (n1/n2), st)
+    | (IntVal n1, IntVal n2) -> 
+        if n2 = 0 then failwith "Runtime Error: Division by zero" 
+        else (IntVal (n1/n2), st)
+    | _ -> raise (TypeError "Div: type mismatch between the operands"))
+  | Div(e1,e2) when is_val e1 ->
+    let (e2', st') = step_expr (e2, st) in (Div(e1,e2'), st')
+  | Div(e1,e2) -> 
+    let (e1', st') = step_expr (e1, st) in (Div(e1',e2), st')
 
   | Eq(e1,e2) when is_val e1 && is_val e2 -> (match e1,e2 with
       | (IntConst n1,IntConst n2)
