@@ -1,0 +1,7 @@
+// unit testing Issue7.sol
+faucet 0xA 100
+
+deploy 0xA:0xC() "C" "contracts/Issue7.sol"
+deploy 0xA:0xD{value: 1}() "D" "contracts/Issue7.sol"
+0xA:0xD.f("0xC")
+assert 0xC x==5

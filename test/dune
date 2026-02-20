@@ -1,6 +1,6 @@
 (library
  (name test)
- (modules parser semantics typechecker)
+ (modules parser semantics typechecker other_tests)
  (inline_tests) 
  (preprocess (pps ppx_inline_test))
  (libraries tinysolLib))

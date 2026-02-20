@@ -279,7 +279,7 @@ let rec step_expr (e,st) = match e with
     let (e_to', st') = step_expr (e_to, st) in
     (FunCall(e_to',f,e_value,e_args), st')
 
-  | ExecFunCall(c) -> (match step_cmd (CmdSt(c,st)) with
+  | ExecFunCall(c) -> (match step_cmd (CmdSt(c,st)) with        (* Runtime only! *)
     | St _ -> failwith "function terminated without return"
     | Reverted s -> failwith s
     | Returned vl -> (match vl with
@@ -351,14 +351,27 @@ and step_cmd = function
         let amt = int_of_expr eamt in
         let from = (List.hd st.callstack).callee in 
         let from_bal = (st.accounts from).balance in
-        if from_bal<amt then Reverted "insufficient balance" else
-        let from_state =  { (st.accounts from) with balance = from_bal - amt } in
-        if exists_account st rcv then
-          let rcv_state = { (st.accounts rcv) with balance = (st.accounts rcv).balance + amt } in
-           St { st with accounts = st.accounts |> bind rcv rcv_state |> bind from from_state}
+        if from_bal < amt then 
+          Reverted "insufficient balance" 
         else
-          let rcv_state = { balance = amt; storage = botenv; code = None; } in
-          St { st with accounts = st.accounts |> bind rcv rcv_state |> bind from from_state; active = rcv::st.active }
+          let from_state = { (st.accounts from) with balance = from_bal - amt } in
+          let st_tmp = { st with accounts = st.accounts |> bind from from_state } in
+          if exists_account st rcv then
+            let rcv_state = { (st_tmp.accounts rcv) with balance = (st_tmp.accounts rcv).balance + amt } in
+            let st' = { st_tmp with accounts = st_tmp.accounts |> bind rcv rcv_state } in
+            (
+              match (st.accounts rcv).code with
+              | Some c -> (
+                match find_fun_in_contract c "receive" with
+                  | Some Proc(fdeclR, _, _, _, _, _) -> CmdSt(ProcCall(ercv, fdeclR, eamt, []), st)
+                  | None -> Reverted "Reverted: The transaction has been reverted to the initial state."
+                  | _ -> failwith "should not happen: receive must be a procedure"
+              )
+              | None -> St st'
+            )
+          else
+            let rcv_state = { balance = amt; storage = botenv; code = None; } in
+            St { st with accounts = st.accounts |> bind rcv rcv_state |> bind from from_state; active = rcv::st.active }
 
     | Send(ercv,eamt) when is_val ercv -> 
         let (eamt', st') = step_expr (eamt, st) in
@@ -412,28 +425,26 @@ and step_cmd = function
         if lookup_balance txfrom st < txvalue then 
           Reverted ("sender " ^ txfrom ^ " has not sufficient wei balance")
         else
-        let from_state = 
-          { (st.accounts txfrom) with balance = (st.accounts txfrom).balance - txvalue } in
-        let to_state  = 
-          { (st.accounts txto) with balance = (st.accounts txto).balance + txvalue } in 
-        let fdecl = Option.get (find_fun_in_sysstate st txto f) in  
-        (* setup new stack frame TODO *)
-        let xl = get_var_decls_from_fun fdecl in
-        let xl',vl' =
-          { ty=VarT(AddrBT false); name="msg.sender"; } :: 
-          { ty=VarT(UintBT); name="msg.value"; } :: xl,
-          Addr txfrom :: 
-          Uint txvalue :: txargs
-        in
-        let fr' = { callee = txto; locals = [bind_fargs_aargs xl' vl'] } in
-        let st' = { accounts = st.accounts 
-                      |> bind txfrom from_state
-                      |> bind txto to_state; 
-                    callstack = fr' :: st.callstack;
-                    blocknum = st.blocknum;
-                    active = st.active } in
-        let c = get_cmd_from_fun fdecl in
-        CmdSt(ExecProcCall(c), st')
+          let from_state = { (st.accounts txfrom) with balance = (st.accounts txfrom).balance - txvalue } in
+          let st_tmp = { st with accounts = st.accounts |> bind txfrom from_state } in
+          let to_state = { (st_tmp.accounts txto) with balance = (st_tmp.accounts txto).balance + txvalue } in 
+          let st_tmp' = { st_tmp with accounts = st_tmp.accounts |> bind txto to_state } in
+          let fdecl = Option.get (find_fun_in_sysstate st txto f) in  
+          (* setup new stack frame *)
+          let xl = get_var_decls_from_fun fdecl in
+          let xl',vl' =
+            { ty=VarT(AddrBT false); name="msg.sender"; } :: 
+            { ty=VarT(UintBT); name="msg.value"; } :: xl,
+            Addr txfrom :: 
+            Uint txvalue :: txargs
+          in
+          let fr' = { callee = txto; locals = [bind_fargs_aargs xl' vl'] } in
+          let st' = { accounts = st_tmp'.accounts;
+                      callstack = fr' :: st.callstack;
+                      blocknum = st.blocknum;
+                      active = st.active } in
+          let c = get_cmd_from_fun fdecl in
+          CmdSt(ExecProcCall(c), st')
 
     | ProcCall(e_to,f,e_value,e_args) when is_val e_to && is_val e_value -> 
       let (e_args', st') = step_expr_list (e_args, st) in 

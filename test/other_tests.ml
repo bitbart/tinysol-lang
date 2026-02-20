@@ -1,5 +1,5 @@
 open Semantics
-open Typechecker
+(* open Typechecker
 
 let%test "test_shortcut_1" = test_exec_tx
   "contract C {  
@@ -85,7 +85,7 @@ let%test "test_mutability_6" = test_exec_tx
   }"
   ["0xA:0xC.f{value:0}()"] 
   [("x==0");] (* msg.value can only be used in payable functions *)
-
+*)
 let%test "test_receive_1" = test_exec_fun
   "contract C { 
       uint x; 
@@ -116,7 +116,7 @@ let%test "test_receive_2" = test_exec_fun
   (* Here the test passes, but just because the semantics of Send
      does not properly push frames on the call stack *)
 
-
+(*
 let%test "test_typecheck_mutability_1" = test_typecheck
   "contract C {
       uint x;
@@ -270,4 +270,145 @@ let%test "test_typecheck_constant_4" = test_typecheck
     constructor() { } 
     function f(int n) external { }
   }"
-  false
+  false *)
+
+
+
+(******************************************************************************)
+(*                           Custom Tests - Issue 7                           *)
+(******************************************************************************)
+
+(* Revert in seguito a arithmetic underflow *)
+let%test "test_1_issue_7" = test_exec_fun 
+  "contract C { 
+      D d;
+      constructor() { d = \"0xD\"; }
+      receive() external payable { d.g(); }
+  }"
+  "contract D { 
+      uint x;
+      constructor() payable { } 
+      function f(address a) public { payable(a).transfer(1); }
+      function g() public { x -= 1; }
+  }"
+  ["0xA:0xD.f(\"0xC\")"] 
+  [("0xC","this.balance==0"); ("0xD","this.balance==100")]
+
+
+(* Pagamenti contratto e EOA *)
+let%test "test_2_issue_7" = test_exec_fun 
+  "contract C { 
+      D d;
+      constructor() { d = \"0xD\"; }
+      function foo(address add) public { payable(add).transfer(10); }
+      receive() external payable { d.g(); }
+  }"
+  "contract D { 
+      uint x;
+      constructor() payable { }
+      function f(address a) public { payable(a).transfer(100); }
+      function g() public { x = 1; }
+      receive() external payable { x += 1; }
+  }"
+  ["0xA:0xD.f(\"0xC\")"; "0xB:0xC.foo(\"0xA\")"] 
+  [
+    ("0xA", "this.balance==110");
+    ("0xB", "this.balance==100");
+    ("0xC", "this.balance==90");
+    ("0xD", "this.balance==0 && x==1")
+  ]
+  
+  
+(* Receive a cascata *)
+let%test "test_3_issue_7" = test_exec_fun 
+  "contract C { 
+      D d;
+      constructor() { d = \"0xD\"; }
+      function foo(address add) public { payable(add).transfer(10); }
+      receive() external payable { d.g(); }
+  }"
+  "contract D { 
+      uint x;
+      constructor() payable { }
+      function f(address a) public { payable(a).transfer(100); }
+      function g() public { x = 1; }
+      receive() external payable { x += 1; }
+  }"
+  ["0xA:0xD.f(\"0xC\")"; "0xB:0xC.foo(\"0xD\")"]
+  [
+    ("0xA", "this.balance==100"); 
+    ("0xB", "this.balance==100"); 
+    ("0xC", "this.balance==90"); 
+    ("0xD", "this.balance==10 && x==2")
+  ]
+
+
+(* Self transfer *)
+let%test "test_4_issue_7" = test_exec_fun 
+"contract C {
+  constructor() payable { }
+}"
+"contract D {
+  uint x;
+  constructor() payable { x = 0; }
+  function f(address add) public { payable(add).transfer(25); }
+  receive() external payable { x += 1; }
+}"
+["0xA:0xD.f(\"0xD\")"]
+[
+  ("0xA", "this.balance==100");
+  ("0xD", "this.balance==100 && x==1")
+]
+
+
+(* Revert in seguito al fallimento della require (analogo Test2.sol) *)
+let%test "test_5_issue_7" = test_exec_fun 
+  "contract C { 
+      D d;
+      constructor() { d = \"0xD\"; }
+      receive() external payable { payable(d).transfer(10); }
+  }"
+  "contract D { 
+      C c;
+      int x;
+      constructor() payable { c = \"0xC\"; }
+      function foo(address a) public { 
+        payable(c).transfer(50);
+        x += 1; }
+      receive() external payable { 
+        require(msg.value > 10);
+        x += 10;
+      }
+  }"
+  ["0xA:0xD.foo()"; "0xB:0xC.foo(\"0xD\")"]
+  [
+    ("0xA", "this.balance==100"); 
+    ("0xB", "this.balance==100"); 
+    ("0xC", "this.balance==0"); 
+    ("0xD", "this.balance==100 && x==0")
+  ]
+
+
+(* Doppio trasferimento in seguito a chiamata a receive() *)
+let%test "test_6_issue_7" = test_exec_fun 
+  "contract C { 
+      D d;
+      constructor() { d = \"0xD\"; }
+      receive() external payable {
+        payable(d).transfer(25);
+        payable(d).transfer(25);
+      }
+  }"
+  "contract D { 
+      uint x;
+      constructor() payable { }
+      function f(address a) public { payable(a).transfer(100); }
+      receive() external payable { x += 1; }
+  }"
+["0xA:0xD.f(\"0xC\")"]
+[
+  ("0xA", "this.balance==100"); 
+  ("0xB", "this.balance==100"); 
+  ("0xC", "this.balance==50"); 
+  ("0xD", "this.balance==50 && x==2")
+]
