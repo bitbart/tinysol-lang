@@ -116,51 +116,6 @@ let%test "test_receive_2" = test_exec_fun
   (* Here the test passes, but just because the semantics of Send
      does not properly push frames on the call stack *)
 
-
-let%test "test_typecheck_mutability_1" = test_typecheck
-  "contract C {
-      uint x;
-      function f() public { x = 1; }
-  }"
-  true
-
-let%test "test_typecheck_mutability_2" = test_typecheck
-  "contract C {
-      uint x;
-      function f() public view { x = 1; }
-  }"
-  false (* f cannot be declared as view because it (potentially) modifies the state *)
-
-let%test "test_typecheck_mutability_3" = test_typecheck
-  "contract C {
-      uint x;
-      function f(uint y) public pure { uint z; z = x*y; }
-  }"
-  false (* f cannot be declared as pure because it (potentially) depends on the state *)
-
-let%test "test_typecheck_mutability_4" = test_typecheck
-  "contract C {
-      uint x;
-      function f(uint y) public pure { uint z; z = y*y; }
-  }"
-  true (* f is pure because it does not depend on the state *)
-
-let%test "test_typecheck_mutability_5" = test_typecheck
-  "contract C {
-    uint x;
-    constructor() { x = 1; }
-    function f() public { require(msg.value == 0); x = 2; }
-  }"
-  false (* msg.value can only be used in payable functions *)
-
-let%test "test_typecheck_mutability_6" = test_typecheck
-  "contract C {
-    uint x;
-    constructor() { x = 1; }
-    function f() public payable { require(msg.value == 0); x = 2; }
-  }"
-  true
-
 let%test "test_typecheck_return_1" = test_typecheck
   "contract C {
     int x;

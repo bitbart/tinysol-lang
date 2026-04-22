@@ -586,3 +586,183 @@ let%test "test_typecheck_enum_6" = test_typecheck
   "contract C { enum E1 {A1,B1} enum E2 {A2,B2} enum E1 {A1,B1} E1 s; function f() public { s = E1.A1; } }"
   false
 
+
+let%test "test_typecheck_mutability_1" = test_typecheck
+  "contract C {
+      uint x;
+      function f() public { x = 1; }
+  }"
+  true
+
+let%test "test_typecheck_mutability_2" = test_typecheck
+  "contract C {
+      uint x;
+      function f() public view { x = 1; }
+  }"
+  false (* f cannot be declared as view because it (potentially) modifies the state *)
+
+let%test "test_typecheck_mutability_3" = test_typecheck
+  "contract C {
+      uint x;
+      function f(uint y) public pure { uint z; z = x*y; }
+  }"
+  false (* f cannot be declared as pure because it (potentially) depends on the state *)
+
+let%test "test_typecheck_mutability_4" = test_typecheck
+  "contract C {
+      uint x;
+      function f(uint y) public pure { uint z; z = y*y; }
+  }"
+  true (* f is pure because it does not depend on the state *)
+
+let%test "test_typecheck_mutability_5" = test_typecheck
+  "contract C {
+    uint x;
+    constructor() { x = 1; }
+    function f() public { require(msg.value == 0); x = 2; }
+  }"
+  false (* msg.value can only be used in payable functions *)
+
+let%test "test_typecheck_mutability_6" = test_typecheck
+  "contract C {
+    uint x;
+    constructor() { x = 1; }
+    function f() public payable { require(msg.value == 0); x = 2; }
+  }"
+  true
+
+let%test "test_typecheck_mutability_7" = test_typecheck
+  "contract C {
+    uint x;
+    constructor() pure { skip; }
+  }"
+  false
+
+let%test "test_typecheck_mutability_8" = test_typecheck
+  "contract C {
+    uint x;
+    constructor() view { skip; }
+  }"
+  false
+
+let%test "test_typecheck_mutability_9" = test_typecheck
+  "contract C {
+    uint x;
+    constructor() { x = msg.value; }
+  }"
+  false
+
+let%test "test_typecheck_mutability_view_read_ok" = test_typecheck
+  "contract Reader { 
+     uint stateVar; 
+     function read() public view { 
+       uint temp; 
+       temp = stateVar;
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_view_write_fail" = test_typecheck
+  "contract Writer { 
+     uint stateVar; 
+     function write() public view { 
+        stateVar = 20; 
+     } 
+   }"
+  false
+
+let%test "test_typecheck_mutability_pure_read_state_fail" = test_typecheck
+  "contract PureFail { 
+     uint stateVar; 
+     function calc() public pure { 
+       uint temp; 
+       temp = stateVar; 
+     } 
+   }"
+  false
+
+let%test "test_typecheck_mutability_pure_local_ok" = test_typecheck
+  "contract PureCalc { 
+     function add(uint a, uint b) public pure { 
+       uint res; 
+       res = a + b; 
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_pure_shadowing_ok" = test_typecheck
+  "contract Shadow { 
+     uint x; 
+     function f() public pure { 
+       uint x; 
+       x = 10; 
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_payable_ok" = test_typecheck
+  "contract Bank { 
+     uint bal; 
+     function deposit() public payable { 
+       uint amount;
+       amount = msg.value;
+       bal = bal + amount; 
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_nonpayable_fail" = test_typecheck
+  "contract Greedy { 
+     function payMe() public { 
+       uint val; 
+       val = msg.value; 
+     } 
+   }"
+  false
+
+let%test "test_typecheck_mutability_view_calls_nonpayable_fail" = test_typecheck
+  "contract Caller { 
+     function bad() public { } 
+     function f() public view { 
+       this.bad();
+     } 
+   }"
+  false
+
+let%test "test_typecheck_mutability_pure_calls_view_fail" = test_typecheck
+  "contract Caller { 
+     function bad() public view { } 
+     function f() public pure { 
+       this.bad();
+     } 
+   }"
+  false
+
+let%test "test_typecheck_mutability_view_calls_pure_ok" = test_typecheck
+  "contract Caller { 
+     function good() public pure { } 
+     function f() public view { 
+       this.good();
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_nonpayable_calls_view_ok" = test_typecheck
+  "contract Caller { 
+     uint x;
+     function good() public view { uint y; y=x; } 
+     function f() public { 
+       this.good();
+     } 
+   }"
+  true
+
+let%test "test_typecheck_mutability_payable_calls_payable_ok" = test_typecheck
+  "contract Caller { 
+     uint x;
+     function good() public { uint y; y=x; } 
+     function f() public payable { 
+       x = msg.value; this.good();
+     } 
+   }"
+  true

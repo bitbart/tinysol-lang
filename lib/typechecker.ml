@@ -75,10 +75,15 @@ exception EnumOptionNotFound of ide * ide * ide
 exception EnumDupName of ide
 exception EnumDupOption of ide * ide
 exception MapInLocalDecl of ide * ide
+exception FunMutabilityError of ide * fun_mutability_t * fun_mutability_t 
 
 let logfun f s = "(" ^ f ^ ")\t" ^ s 
 
 (* Prettyprinting of typechecker errors *)
+
+let string_of_fun_mutability = function
+  | Pure -> "pure" | View -> "view" | Payable -> "payable" | NonPayable -> "nonpayable"
+
 let string_of_typecheck_error = function
 | TypeError (f,e,t1,t2) -> 
     logfun f
@@ -95,6 +100,7 @@ let string_of_typecheck_error = function
 | EnumDupName x -> "enum " ^ x ^ " is declared multiple times"
 | EnumDupOption (x,o) -> "enum option " ^ o ^ " is declared multiple times in enum " ^ x
 | MapInLocalDecl (f,x) -> logfun f "mapping " ^ x ^ " not admitted in local declaration" 
+| FunMutabilityError (f,m_declared,m_inferred) -> logfun f "function mutability declared as " ^ (string_of_fun_mutability m_declared) ^ " but inferred as " ^ (string_of_fun_mutability m_inferred)
 | ex -> Printexc.to_string ex
 
 let exprtype_of_decltype = function
@@ -378,7 +384,7 @@ let rec typecheck_expr (f : ide) (edl : enum_decl list) vdl = function
       | err -> err)
 
   | UnknownCast(_) -> assert(false) (* should not happen after preprocessing *)
-  | FunCall(_) -> failwith "TODO: FunCall"
+  | FunCall(_) -> failwith ("TODO: FunCall")
 
   | ExecFunCall(_) -> assert(false) (* this should not happen at static time *)
 
@@ -457,26 +463,133 @@ let rec typecheck_cmd (f : ide) (edl : enum_decl list) (vdl : all_var_decls) = f
 
     | Decl(_) -> assert(false) (* should not happen after blockify *)
 
-    | ProcCall(_) -> failwith "TODO: ProcCall"
+    | ProcCall(_) -> Ok() (* TODO: ProcCall *)
 
     | ExecProcCall(_) -> assert(false) (* should not happen at static time *)
 
     | Return(_) -> failwith "TODO: Return"
 
+   
+let join_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : fun_mutability_t = match (m1,m2) with
+  | Payable,_ -> Payable
+  | _,Payable -> Payable
+  | NonPayable,_ -> NonPayable
+  | _,NonPayable -> NonPayable
+  | View,_ -> View
+  | _,View -> View
+  | _ -> Pure
 
-let typecheck_fun (edl : enum_decl list) (vdl : var_decl list) = function
-  | Constr (al,c,_) ->
+let leq_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : bool = 
+  m2 = join_mutability m1 m2
+
+let rec mutability_of_expr e (vdl : local_var_decl list) (fdl : fun_decl list) = match e with
+  | BoolConst _ 
+  | IntConst _
+  | IntVal _ 
+  | UintVal _
+  | AddrConst _ -> Pure
+  | BlockNum
+  | This -> View
+  | Var x -> 
+    if x="msg.value" then Payable 
+    else if List.mem x (List.map (fun (vd : local_var_decl) -> vd.name) vdl) then Pure 
+    else View
+  | MapR(e1,e2) -> join_mutability View (join_mutability (mutability_of_expr e1 vdl fdl) (mutability_of_expr e2 vdl fdl))
+  | BalanceOf(e) -> join_mutability (mutability_of_expr e vdl fdl) View
+  | Not(e) -> mutability_of_expr e vdl fdl
+  | And(e1,e2) 
+  | Or(e1,e2)
+  | Add(e1,e2)
+  | Sub(e1,e2)
+  | Mul(e1,e2)
+  | Div(e1,e2)
+  | Eq(e1,e2)
+  | Neq(e1,e2)
+  | Leq(e1,e2)
+  | Lt(e1,e2)   
+  | Geq(e1,e2)
+  | Gt(e1,e2) -> join_mutability (mutability_of_expr e1 vdl fdl) (mutability_of_expr e2 vdl fdl)
+  | IfE(e1,e2,e3) -> join_mutability 
+                      (mutability_of_expr e1 vdl fdl) 
+                      (join_mutability (mutability_of_expr e2 vdl fdl) (mutability_of_expr e3 vdl fdl))
+  | IntCast(e)
+  | UintCast(e) 
+  | AddrCast(e) 
+  | PayableCast(e) -> mutability_of_expr e vdl fdl
+  | EnumOpt(_,_) -> Pure 
+  | EnumCast(_,e)
+  | ContractCast(_,e) -> mutability_of_expr e vdl fdl
+  | UnknownCast(_) -> assert(false) (* should not happen after preprocessing *)
+  | FunCall(e_to,f,e_value,e_args) ->
+      join_mutability
+        (Option.get (mutability_of_fun f fdl)) 
+        (List.fold_left (fun acc e -> join_mutability acc (mutability_of_expr e vdl fdl)) Pure 
+        ([e_to; e_value] @ e_args))
+        
+  | ExecFunCall(_) -> assert(false) (* this should not happen at static time *)
+
+and mutability_of_cmd c (vdl : local_var_decl list) (fdl : fun_decl list) = match c with
+  | Skip -> Pure
+  | Assign(x,e) -> 
+    let m = 
+      if List.mem x (List.map (fun (vd : local_var_decl) -> vd.name) vdl) then Pure 
+      else NonPayable 
+    in join_mutability m (mutability_of_expr e vdl fdl) 
+  | Decons(_) -> failwith "TODO: multiple return values"
+  | MapW(_,ek,ev) -> join_mutability NonPayable (join_mutability (mutability_of_expr ek vdl fdl) (mutability_of_expr ev vdl fdl)) 
+  | Seq(c1,c2) -> join_mutability (mutability_of_cmd c1 vdl fdl) (mutability_of_cmd c2 vdl fdl)
+  | If(e,c1,c2) -> join_mutability 
+                    (mutability_of_expr e vdl fdl) 
+                    (join_mutability (mutability_of_cmd c1 vdl fdl) (mutability_of_cmd c2 vdl fdl))
+  | Send(_,_) -> Payable
+  | Req(e) -> mutability_of_expr e vdl fdl
+  | Block(lvdl,c) -> mutability_of_cmd c (lvdl @ vdl) fdl
+  | ExecBlock(_) -> assert(false) (* should not happen at static time *)
+  | Decl(_) -> assert(false) (* should not happen after blockify *)
+  | ProcCall(e_to,f,e_value,e_args) -> 
+      join_mutability
+        (Option.get (mutability_of_fun f fdl)) 
+        (List.fold_left (fun acc e -> join_mutability acc (mutability_of_expr e vdl fdl)) Pure 
+        ([e_to; e_value] @ e_args))
+
+  | ExecProcCall(_) -> assert(false) (* should not happen at static time *)
+  | Return(_) -> failwith "TODO: Return"
+
+and mutability_of_fun (f : ide) (fdl : fun_decl list) : fun_mutability_t option =
+  List.fold_left
+    (fun acc fd -> match fd with
+      | Constr(_,_,m) when f = "constructor" -> Some m
+      | Proc(name,_,_,_, m,_) when f = name -> Some m
+      | _ -> acc)
+  None fdl
+
+let typecheck_constructor_mutability m c (vdl : local_var_decl list) (fdl : fun_decl list)=
+  let m_actual = join_mutability NonPayable (mutability_of_cmd c vdl fdl) in
+  if leq_mutability m_actual m then Ok() 
+  else Error [FunMutabilityError ("constructor",m,m_actual)]
+
+let typecheck_fun_mutability f m c (vdl : local_var_decl list) (fdl : fun_decl list) =
+  let m_actual = mutability_of_cmd c vdl fdl in
+  if leq_mutability m_actual m then Ok() 
+  else Error [FunMutabilityError (f,m,m_actual)]
+
+let typecheck_fun (edl : enum_decl list) (vdl : var_decl list) (fdl : fun_decl list) = function
+  | Constr (al,c,m) ->
       no_dup_local_var_decls "constructor" al
       >>
       typecheck_local_decls "constructor" al
       >> 
       typecheck_cmd "constructor" edl (merge_var_decls vdl al) c
-  | Proc (f,al,c,_,__,_) ->
+      >>
+      typecheck_constructor_mutability m c al fdl
+  | Proc (f,al,c,_,m,_) ->
       no_dup_local_var_decls f al
       >> 
       typecheck_local_decls f al
       >>
       typecheck_cmd f edl (merge_var_decls vdl al) c
+      >>
+      typecheck_fun_mutability f m c al fdl    
 
 (* dup_first: finds the first duplicate in a list *)
 let rec dup_first (l : 'a list) : 'a option = match l with 
@@ -510,7 +623,7 @@ let typecheck_contract (Contract(_,edl,vdl,fdl)) : typecheck_result =
   (* no multiply declared functions *)
   no_dup_fun_decls fdl
   >>
-  List.fold_left (fun acc fd -> acc >> typecheck_fun edl vdl fd) (Ok ()) fdl  
+  List.fold_left (fun acc fd -> acc >> typecheck_fun edl vdl fdl fd) (Ok ()) fdl  
 
 
 let string_of_typecheck_result = function
