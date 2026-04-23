@@ -127,6 +127,20 @@ and var_decl = {
 
 and local_var_decl = { ty: var_type; name: ide; }
 
+
+let join_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : fun_mutability_t = match (m1,m2) with
+  | Payable,_ -> Payable
+  | _,Payable -> Payable
+  | NonPayable,_ -> NonPayable
+  | _,NonPayable -> NonPayable
+  | View,_ -> View
+  | _,View -> View
+  | _ -> Pure
+
+let leq_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : bool = 
+  m2 = join_mutability m1 m2
+
+
 (* Function declarations
   - the constructor is always public, and it can be payable
   - functions can be either public or private, and they can be payable

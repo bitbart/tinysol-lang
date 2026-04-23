@@ -1,6 +1,10 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity <= 0.8;
 
+contract C {
+    function g() public returns(uint) { return 1; }
+}
+
 contract C3 {
     uint x;
     C c;

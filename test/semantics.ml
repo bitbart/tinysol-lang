@@ -11,7 +11,7 @@ let test_exec_cmd (c,n_steps,var,exp_val) =
   c
   |> parse_cmd
   |> blockify_cmd (* TODO: enumify? *)
-  |> fun c -> exec_cmd n_steps c (push_callstack {callee="0xC"; locals=[];} init_sysstate)
+  |> fun c -> exec_cmd n_steps c (push_callstack {callee="0xC"; callee_fun = Constr([], Skip, NonPayable); locals=[];} init_sysstate)
   |> fun t -> match t with
   | St st -> Option.get (lookup_var var st) = exp_val
   | CmdSt(_,st) -> Option.get (lookup_var var st) = exp_val
@@ -90,7 +90,7 @@ let test_exec_tx (src: string) (txl: string list) (els : string list) =
   |> deploy_contract { txsender="0xA"; txto="0xC"; txfun="constructor"; txargs=[]; txvalue=0; } src 
   |> exec_tx_list 1000 txl 
   |> fun st -> List.map (fun x -> x |> parse_expr |> eval_expr 
-      { st with callstack = [{ callee = "0xC"; locals = []}] } ) els 
+      { st with callstack = [{ callee = "0xC"; callee_fun = Constr([], Skip, NonPayable); locals = []}] } ) els 
   |> List.for_all (fun v -> v = Bool true)
 
 let c1 = "contract C {
@@ -355,7 +355,7 @@ let test_exec_constructor (src: string) (value: int) (args: exprval list) (els :
   |> faucet "0xA" 100
   |> deploy_contract { txsender="0xA"; txto="0xC"; txfun="constructor"; txargs=args; txvalue=value; } src 
   |> fun st -> List.map (fun x -> x |> parse_expr |> eval_expr 
-      { st with callstack = [{ callee = "0xC"; locals = []}] } ) els 
+      { st with callstack = [{ callee = "0xC"; callee_fun = Constr([], Skip, NonPayable); locals = []}] } ) els 
   |> List.for_all (fun v -> v = Bool true)
 
 let%test "test_constructor_1" = test_exec_constructor
@@ -431,7 +431,7 @@ let test_exec_fun (src1: string) (src2: string) (txl : string list) (els : (addr
   |> deploy_contract { txsender="0xA"; txto="0xD"; txfun="constructor"; txargs=[]; txvalue=100; } src2 
   |> exec_tx_list 1000 txl 
   |> fun st -> List.map (fun (a,x) -> x |> parse_expr |> eval_expr 
-    { st with callstack = [ { callee = a; locals = [] } ] }) els 
+    { st with callstack = [ { callee = a; callee_fun = Constr([], Skip, NonPayable); locals = [] } ] }) els 
   |> List.for_all (fun v -> v = Bool true)
 
 let%test "test_proc_1" = test_exec_fun
@@ -942,3 +942,241 @@ let%test "test_shortcut_22" = test_exec_tx
   }"
   ["0xA:0xC.f()"]
   [("x==30")]
+
+
+(********************************************************************************
+ * Variable mutability modifiers
+ ********************************************************************************)
+
+let%test "test_var_mutability_1" = test_exec_tx
+  "contract C {
+      uint constant x = 1;
+      function f() public { x = 2; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_var_mutability_2" = test_exec_tx
+  "contract C {
+      uint immutable x;
+      constructor() { x = 2; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_var_mutability_3" = test_exec_tx
+  "contract C {
+      uint immutable x;
+      constructor() { x = 2; }
+      function f() public { x = 3; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_var_mutability_4" = test_exec_tx
+  "contract C {
+      uint x;
+      constructor() { x = 2; }
+      function f() public { x = 3; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==3");]
+
+(*
+let%test "test_var_mutability_5_constructor_revert" = test_exec_tx
+  "contract C {
+      uint constant x = 1;
+      constructor() { x = 2; }
+  }"
+  [] 
+  [("x==1");]
+*)
+
+(********************************************************************************
+ * Function mutability modifiers
+ ********************************************************************************)
+
+let%test "test_fun_mutability_1" = test_exec_tx
+  "contract C {
+      uint x;
+      function f() public { x = 1; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_fun_mutability_2" = test_exec_tx
+  "contract C {
+      uint x;
+      function f() public view { x = 1; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==0");] (* f cannot be declared as view because it (potentially) modifies the state *)
+
+(* the following contract would not pass typechecking, but runtime is ok *)
+let%test "test_fun_mutability_3" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public view { }
+      function f() public { this.g(); x = 1; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_fun_mutability_4" = test_exec_tx
+  "contract C {
+      uint x;
+      constructor() { x = 1; }
+      function g() public view returns(uint) { uint y; y = x+1; return y; }
+      function f() public { x = this.g(); }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_fun_mutability_5" = test_exec_tx
+  "contract C {
+      uint x;
+      constructor() { x = 1; }
+      function g() public pure returns(uint) { uint y; y = x+1; return y; }
+      function f() public { x = this.g(); }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_fun_mutability_6" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public view { uint y; y=block.number; }  
+      function f() public { this.g(); x=1; }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_fun_mutability_7" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public pure { uint y; y=block.number; }  
+      function f() public { this.g(); x=1; }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==0");]
+
+let%test "test_fun_mutability_8" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) m;
+      constructor() { m[1]=2; }
+      function g(uint i) public view returns(uint) { return (m[i]); }  
+      function f() public { x = this.g(1); }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_fun_mutability_9" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) m;
+      constructor() { m[1]=2; }
+      function g(uint i) public pure returns(uint) { return (m[i]); }  
+      function f() public { x = this.g(1); }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==0");]
+
+let%test "test_fun_mutability_10" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public view { uint y; y=address(this).balance; }  
+      function f() public { this.g(); x=1; }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_fun_mutability_11" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public pure { uint y; y=address(this).balance; }  
+      function f() public { this.g(); x=1; }  
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==0");]
+
+let%test "test_fun_mutability_12" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public payable { x=5; } 
+      function f() public { 
+        uint b; 
+        b = address(this).balance;
+        msg.sender.transfer(1); 
+        x = b - address(this).balance;
+      }  
+  }"
+  ["0xA:0xC.g{value : 50}()"; "0xA:0xC.f()"] 
+  ["this.balance==49"; "x==1"]
+
+let%test "test_fun_mutability_13" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public payable { x=5; } 
+      function f() public view { 
+        uint b; 
+        b = address(this).balance;
+        msg.sender.transfer(1); 
+        x = b - address(this).balance;
+      }  
+  }"
+  ["0xA:0xC.g{value : 50}()"; "0xA:0xC.f()"] 
+  ["this.balance==50"; "x==5"]
+
+let%test "test_fun_mutability_14" = test_exec_tx
+  "contract C {
+      uint x;
+      function g() public payable { x=5; } 
+      function f() public view { 
+        msg.sender.transfer(1); 
+      }  
+  }"
+  ["0xA:0xC.g{value : 50}()"; "0xA:0xC.f()"] 
+  ["this.balance==50"; "x==5"]
+
+let%test "test_fun_mutability_15" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) m;
+      function g(uint i) public view returns(uint) { return (m[i]); } 
+      function f() public { m[1] = 2; x = this.g(1); }
+  }"
+  ["0xA:0xC.f()"] 
+  ["x==2"]
+
+let%test "test_fun_mutability_16" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) m;
+      constructor() { m[1] = 2; }
+      function g(uint i) public pure returns(uint) { return (m[i]); } 
+      function f() public { x = this.g(1); }
+  }"
+  ["0xA:0xC.f()"] 
+  ["x==0"]
+
+let%test "test_fun_mutability_17" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) immutable m;
+      function g() public { m[1] = 2; } 
+      function f() public { x = m[1]+1; }
+  }"
+  ["0xA:0xC.g()"; "0xA:0xC.f()"] 
+  ["x==1"]
+
+let%test "test_fun_mutability_18" = test_exec_tx
+  "contract C {
+      uint x;
+      mapping (uint => uint) m;
+      function g() public { m[1] = 2; } 
+      function h() public view returns(uint) { return(m[1]+1); }
+      function f() public { x = this.h(); }
+  }"
+  ["0xA:0xC.g()"; "0xA:0xC.f()"] 
+  ["x==3"]

@@ -19,7 +19,8 @@ type account_state = {
 }
 
 type frame = {
-  callee: addr;
+  callee: addr;            (* called contract *)
+  callee_fun: fun_decl;    (* declaration of called function *)
   locals: env list;
 }
 
@@ -27,7 +28,7 @@ type sysstate = {
   accounts: addr -> account_state;
   callstack: frame list;
   blocknum: int;
-  active: addr list; (* set of all active addresses (for debugging)*)
+  active: addr list; (* set of all active addresses (for debugging) *)
 }
 
 (* execution state of a command *)
@@ -81,6 +82,7 @@ let lookup_var (x : ide) (st : sysstate) : exprval option =
     let cs = st.accounts fr.callee in
     try Some (cs.storage x)
     with _ -> None
+
 
 let type_of_var x st = match Option.get (lookup_var x st) with
    | Int _  -> IntBT
@@ -186,12 +188,33 @@ let find_fun_in_contract (Contract(_,_,_,fdl)) (f : ide) : fun_decl option =
   None
   fdl
 
+let find_var_decl_in_sysstate (st : sysstate) (x : ide) : var_decl option =
+    let fr = List.hd st.callstack in
+    match (st.accounts fr.callee).code with
+    | Some (Contract(_,_,vdl,_)) ->
+        let rec find = function
+            | [] -> None
+            | (vd : var_decl)::tl -> if vd.name = x then Some vd else find tl
+        in
+        find vdl
+    | None -> None
+
 let find_fun_in_sysstate (st : sysstate) (a : addr) (f : ide) = 
   if not (exists_account st a) then
     failwith ("address " ^ a ^ " does not exist")
   else match (st.accounts a).code with
     | None -> None  (* "address " ^ a ^ " is not a contract address" *)
     | Some(c) -> find_fun_in_contract c f 
+
+let in_constructor st =
+  match (List.hd st.callstack).callee_fun with
+    | Constr _ -> true
+    | Proc _ -> false
+
+let get_mutability st = 
+  match (List.hd st.callstack).callee_fun with
+  | Constr(_,_,m) -> m
+  | Proc(_,_,_,_,m,_) -> m
 
 let get_cmd_from_fun = function
   | (Constr(_,c,_)) -> c

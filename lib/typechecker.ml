@@ -76,6 +76,7 @@ exception EnumDupName of ide
 exception EnumDupOption of ide * ide
 exception MapInLocalDecl of ide * ide
 exception FunMutabilityError of ide * fun_mutability_t * fun_mutability_t 
+exception FunNotFoundError of ide 
 
 let logfun f s = "(" ^ f ^ ")\t" ^ s 
 
@@ -101,6 +102,7 @@ let string_of_typecheck_error = function
 | EnumDupOption (x,o) -> "enum option " ^ o ^ " is declared multiple times in enum " ^ x
 | MapInLocalDecl (f,x) -> logfun f "mapping " ^ x ^ " not admitted in local declaration" 
 | FunMutabilityError (f,m_declared,m_inferred) -> logfun f "function mutability declared as " ^ (string_of_fun_mutability m_declared) ^ " but inferred as " ^ (string_of_fun_mutability m_inferred)
+| FunNotFoundError (f) -> logfun f "function not found"
 | ex -> Printexc.to_string ex
 
 let exprtype_of_decltype = function
@@ -469,19 +471,6 @@ let rec typecheck_cmd (f : ide) (edl : enum_decl list) (vdl : all_var_decls) = f
 
     | Return(_) -> failwith "TODO: Return"
 
-   
-let join_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : fun_mutability_t = match (m1,m2) with
-  | Payable,_ -> Payable
-  | _,Payable -> Payable
-  | NonPayable,_ -> NonPayable
-  | _,NonPayable -> NonPayable
-  | View,_ -> View
-  | _,View -> View
-  | _ -> Pure
-
-let leq_mutability (m1 : fun_mutability_t) (m2 : fun_mutability_t) : bool = 
-  m2 = join_mutability m1 m2
-
 let rec mutability_of_expr e (vdl : local_var_decl list) (fdl : fun_decl list) = match e with
   | BoolConst _ 
   | IntConst _
@@ -541,17 +530,19 @@ and mutability_of_cmd c (vdl : local_var_decl list) (fdl : fun_decl list) = matc
   | If(e,c1,c2) -> join_mutability 
                     (mutability_of_expr e vdl fdl) 
                     (join_mutability (mutability_of_cmd c1 vdl fdl) (mutability_of_cmd c2 vdl fdl))
-  | Send(_,_) -> Payable
+  | Send(e1,e2) ->
+      join_mutability NonPayable 
+        (join_mutability (mutability_of_expr e1 vdl fdl) (mutability_of_expr e2 vdl fdl)) 
   | Req(e) -> mutability_of_expr e vdl fdl
   | Block(lvdl,c) -> mutability_of_cmd c (lvdl @ vdl) fdl
   | ExecBlock(_) -> assert(false) (* should not happen at static time *)
   | Decl(_) -> assert(false) (* should not happen after blockify *)
-  | ProcCall(e_to,f,e_value,e_args) -> 
-      join_mutability
-        (Option.get (mutability_of_fun f fdl)) 
+  | ProcCall(e_to,f,e_value,e_args) -> (match mutability_of_fun f fdl with
+      | None -> assert (false) (* should not happen: undeclared functions already checked *)
+      | Some m -> join_mutability
+        m 
         (List.fold_left (fun acc e -> join_mutability acc (mutability_of_expr e vdl fdl)) Pure 
-        ([e_to; e_value] @ e_args))
-
+        ([e_to; e_value] @ e_args)))
   | ExecProcCall(_) -> assert(false) (* should not happen at static time *)
   | Return(_) -> failwith "TODO: Return"
 

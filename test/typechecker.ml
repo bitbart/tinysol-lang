@@ -770,3 +770,49 @@ let%test "test_typecheck_mutability_payable_calls_payable_ok" = test_typecheck
      } 
    }"
   true
+
+let%test "test_typecheck_mutability_nonpayable_send" = test_typecheck
+  "contract C { 
+    function f(address a) public {
+        if (address(this).balance > 0)
+            payable(a).transfer(1);
+    }
+  }"
+  true
+
+
+(********************************************************************************
+ * Variable mutability modifiers
+ ********************************************************************************)
+
+let%test "test_typecheck_var_mutability_1" = test_typecheck
+  "contract C {
+    int constant N=1;
+    constructor() { } 
+    function f(int n) external { }
+  }"
+  true
+
+let%test "test_typecheck_var_mutability_2" = test_typecheck
+  "contract C {
+    int constant N=1;
+    constructor() { } 
+    function f(int n) external { N=2; }
+  }"
+  false
+
+let%test "test_typecheck_var_mutability_3" = test_typecheck
+  "contract C {
+    int constant N=1;
+    constructor() { N=2; } 
+    function f(int n) external { }
+  }"
+  false
+
+let%test "test_typecheck_var_mutability_4" = test_typecheck
+  "contract C {
+    int constant N;
+    constructor() { } 
+    function f(int n) external { }
+  }"
+  false

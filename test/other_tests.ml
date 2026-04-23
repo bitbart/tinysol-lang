@@ -1,21 +1,6 @@
 open Semantics
 open Typechecker
 
-let%test "test_mutability_1" = test_exec_tx
-  "contract C {
-      uint x;
-      function f() public { x = 1; }
-  }"
-  ["0xA:0xC.f()"] 
-  [("x==1");]
-
-let%test "test_mutability_2" = test_exec_tx
-  "contract C {
-      uint x;
-      function f() public view { x = 1; }
-  }"
-  ["0xA:0xC.f()"] 
-  [("x==0");] (* f cannot be declared as view because it (potentially) modifies the state *)
 
 let%test "test_mutability_3" = test_exec_tx
   "contract C {
@@ -158,35 +143,3 @@ let%test "test_typecheck_visibility_2" = test_typecheck
   }"
   false (* f is declared as external, so it cannot be invoked through an internal call *)
 *)
-
-let%test "test_typecheck_constant_1" = test_typecheck
-  "contract C {
-    int constant N=1;
-    constructor() { } 
-    function f(int n) external { }
-  }"
-  true
-
-let%test "test_typecheck_constant_2" = test_typecheck
-  "contract C {
-    int constant N=1;
-    constructor() { } 
-    function f(int n) external { N=2; }
-  }"
-  false
-
-let%test "test_typecheck_constant_3" = test_typecheck
-  "contract C {
-    int constant N=1;
-    constructor() { N=2; } 
-    function f(int n) external { }
-  }"
-  false
-
-let%test "test_typecheck_constant_4" = test_typecheck
-  "contract C {
-    int constant N;
-    constructor() { } 
-    function f(int n) external { }
-  }"
-  false

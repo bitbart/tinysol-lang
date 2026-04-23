@@ -15,22 +15,38 @@ let rec step_expr (e,st) = match e with
 
   | This -> ((AddrConst (List.hd(st.callstack)).callee), st)
 
-  | BlockNum -> (IntConst st.blocknum, st)
+  | BlockNum -> 
+    if get_mutability st == Pure then
+      failwith "Cannot read block.num in pure function"
+    else 
+      (IntConst st.blocknum, st)
 
-  | Var x -> (expr_of_exprval (Option.get (lookup_var x st)), st)  
+  | Var x ->   
+    if lookup_locals x (List.hd st.callstack).locals == None && get_mutability st == Pure then
+      failwith ("Cannot read state variable " ^ x ^ " in pure function")
+    else 
+      (expr_of_exprval (Option.get (lookup_var x st)), st)
 
-  | MapR(Var x,e2) when is_val e2 -> (match Option.get (lookup_var x st) with
-    | Map m -> (expr_of_exprval (m (exprval_of_expr e2)), st)
-    | _ -> failwith "step_expr: wrong type checking of map?")
+  | MapR(Var x,e2) when is_val e2 ->
+    if get_mutability st == Pure then
+      failwith "Cannot read maps in pure function"
+    else 
+      (match Option.get (lookup_var x st) with
+      | Map m -> (expr_of_exprval (m (exprval_of_expr e2)), st)
+      | _ -> failwith "step_expr: wrong type checking of map?")
+
   | MapR(Var x,e2) ->
     let (e2', st') = step_expr (e2, st) in (MapR(Var x,e2'), st')
   | MapR(e1,e2) ->
     let (e1', st') = step_expr (e1, st) in (MapR(e1',e2), st')
 
-  | BalanceOf e when is_val e -> 
-    let b = addr_of_expr e in (UintVal (lookup_balance b st), st)
-  | BalanceOf e -> 
-    let (e', st') = step_expr (e, st) in (BalanceOf e', st')
+  | BalanceOf e when is_val e ->
+    if get_mutability st == Pure then
+      failwith "Cannot read state variables in pure function"
+    else 
+      let b = addr_of_expr e in (UintVal (lookup_balance b st), st)
+    | BalanceOf e -> 
+      let (e', st') = step_expr (e, st) in (BalanceOf e', st')
 
   | Not(e) when is_val e -> 
     let b = bool_of_expr e in (BoolConst (not b), st)
@@ -261,7 +277,7 @@ let rec step_expr (e,st) = match e with
       Addr txfrom :: 
       Uint txvalue :: txargs
     in
-    let fr' = { callee = txto; locals = [bind_fargs_aargs xl' vl'] } in 
+    let fr' = { callee = txto; callee_fun = fdecl; locals = [bind_fargs_aargs xl' vl'] } in 
     let st' = { accounts = st.accounts 
                   |> bind txfrom from_state
                   |> bind txto to_state; 
@@ -319,16 +335,30 @@ and step_cmd = function
 
     | Skip -> St st
 
-    | Assign(x,e) when is_val e -> 
-        St (update_var st x (exprval_of_expr_typechecked e (type_of_var x st)))
+    | Assign(x,e) when is_val e ->
+      (* x is a local variable *)
+      if lookup_locals x (List.hd st.callstack).locals <> None then
+          St (update_var st x (exprval_of_expr_typechecked e (type_of_var x st)))
+      else (match find_var_decl_in_sysstate st x with
+        | Some vd when vd.mutability = Constant 
+          -> Reverted "Cannot assign to constant variable"
+        | Some vd when vd.mutability = Immutable && not (in_constructor st) 
+          -> Reverted "Assign to immutable variable only in constructor"
+        | _ when leq_mutability (get_mutability st) View -> Reverted "Cannot assign state variables from pure function"
+        | _ -> St (update_var st x (exprval_of_expr_typechecked e (type_of_var x st))))
         
     | Assign(x,e) -> 
       let (e', st') = step_expr (e, st) in CmdSt(Assign(x,e'), st')
 
     | Decons(_) -> failwith "TODO: multiple return values"
 
-    | MapW(x,ek,ev) when is_val ek && is_val ev ->
-        St (update_map st x (exprval_of_expr ek) (exprval_of_expr ev))
+    | MapW(x,ek,ev) when is_val ek && is_val ev -> (
+      match find_var_decl_in_sysstate st x with
+        | Some vd when vd.mutability <> Mutable 
+          -> Reverted "Mappings must be mutable"
+        | _ when leq_mutability (get_mutability st) View -> Reverted "Cannot assign state variables from pure function"
+        | _ -> St (update_map st x (exprval_of_expr ek) (exprval_of_expr ev)))
+
     | MapW(x,ek,ev) when is_val ek -> 
       let (ev', st') = step_expr (ev, st) in 
       CmdSt(MapW(x,ek,ev'), st')
@@ -351,6 +381,9 @@ and step_cmd = function
         CmdSt(If(e',c1,c2), st')
 
     | Send(ercv,eamt) when is_val ercv && is_val eamt -> 
+      if leq_mutability (get_mutability st) View then
+        failwith "Cannot transfer ETH in pure or view function"
+      else 
         let rcv = addr_of_expr ercv in 
         let amt = int_of_expr eamt in
         let from = (List.hd st.callstack).callee in 
@@ -429,7 +462,7 @@ and step_cmd = function
           Addr txfrom :: 
           Uint txvalue :: txargs
         in
-        let fr' = { callee = txto; locals = [bind_fargs_aargs xl' vl'] } in
+        let fr' = { callee = txto; callee_fun = fdecl; locals = [bind_fargs_aargs xl' vl'] } in
         let st' = { accounts = st.accounts 
                       |> bind txfrom from_state
                       |> bind txto to_state; 
@@ -572,8 +605,8 @@ let exec_tx (n_steps : int) (tx: transaction) (st : sysstate) : (sysstate,string
             callstack = st.callstack;
             blocknum = st.blocknum;
             active = tx.txto :: st.active }
-      | Some (Proc(_,xl,c,_,m,_))
-      | Some (Constr(xl,c,m)) ->
+      | Some (Proc(_,xl,c,_,m,_) as fd)
+      | Some (Constr(xl,c,m) as fd) ->
         if m<>Payable && tx.txvalue>0 then 
             Error "sending ETH to a non-payable function"
         else
@@ -592,7 +625,7 @@ let exec_tx (n_steps : int) (tx: transaction) (st : sysstate) : (sysstate,string
               { ty=VarT(UintBT); name="msg.value"; } :: xl,
               Addr tx.txsender :: Uint tx.txvalue :: tx.txargs
           in
-          let fr' = { callee = tx.txto; locals = [bind_fargs_aargs xl' vl'] } in
+          let fr' = { callee = tx.txto; callee_fun = fd; locals = [bind_fargs_aargs xl' vl'] } in
           let st' = { accounts = st.accounts 
                         |> bind tx.txsender sender_state
                         |> bind tx.txto to_state; 

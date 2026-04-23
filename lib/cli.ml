@@ -49,7 +49,7 @@ let exec_cli_cmd (cc : cli_cmd) (lastReverted : bool) (st : sysstate) : sysstate
         | Ok _ -> failwith ("revert violation: transaction " ^ string_of_transaction tx ^ " should revert") 
         | Error _ -> st)
   | Assert(a,e) -> 
-    (match eval_expr { st with callstack = [{callee = a; locals = []}] } e with
+    (match eval_expr { st with callstack = [{callee = a; callee_fun = Constr([], Skip, NonPayable); locals = []}] } e with
     | Bool true -> st
     | _ -> failwith ("assertion violation: " ^ string_of_cli_cmd cc)) 
   | LastReverted -> if lastReverted then st else failwith "lastReverted" 
