@@ -695,3 +695,247 @@ let%test "test_fun_20" = test_exec_fun
   }"
   ["0xA:0xD.g()"] 
   [("0xC","this.balance==100"); ("0xD","this.balance==0")]
+
+
+
+let%test "test_shortcut_1" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (x==1 || this.g()==1) x+=1; else x=5; }
+      function g() public returns(uint) { require(x==0); return 1; } 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_shortcut_2" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (x==1 || this.g()==1) x+=1; else x=5; }
+      function g() public returns(uint) { require(x==0); return 1; } 
+  }"
+  ["0xA:0xC.f()"; "0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_shortcut_3" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (x==0 && this.g()==1) x=1; else x=5; }
+      function g() public returns(uint) { require(x==0); return 1; }
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_shortcut_4" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (x==0 && this.g()==1) x=1; else x=5; }
+      function g() public returns(uint) { require(x==0); return 1; }
+  }"
+  ["0xA:0xC.f()"; "0xA:0xC.f()"] 
+  [("x==5");]
+
+let%test "test_shortcut_5" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (x==0 || this.g()==1) x+=1; else x+=2; }
+      function g() public returns(uint) { require(false); x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==1");]
+
+let%test "test_shortcut_6" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (false || this.g()==1) x+=1; else x+=2; }
+      function g() public returns(uint) {x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==11");]
+
+let%test "test_shortcut_7" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (false || this.g()==0) x+=1; else x+=2; }
+      function g() public returns(uint) {x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==12");]
+
+  let%test "test_shortcut_8" = test_exec_tx
+  "contract C {
+      uint x;
+      uint y;
+      function f() public { 
+          x = 1;  // primo termine sarà true (x==1)
+          if (x==1 || this.g()==5) { x = x + 1; }
+      }
+      function g() public returns(uint) { 
+          y = y + 1;  // contatore chiamate
+          return 5; 
+      }
+  }"
+  ["0xA:0xC.f()"]
+  ["x==2"; "y==0"]
+
+  let%test "test_shortcut_9" = test_exec_tx
+  "contract C {
+      uint x;
+      uint y;
+      function f() public { 
+          x = 1;  // primo termine sarà true (x==1)
+          if (x==2 || this.g()==5) { x = x + 1; }
+      }
+      function g() public returns(uint) { 
+          y = y + 1;  // contatore chiamate
+          return 5; 
+      }
+  }"
+  ["0xA:0xC.f()"]
+  ["x==2"; "y==1"]
+
+let%test "test_shortcut_10" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (false && this.g()==0) x+=1; else x+=2; }
+      function g() public returns(uint) {x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==2");]
+
+let%test "test_shortcut_11" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (true && this.g()==0) x+=1; else x+=2; }
+      function g() public returns(uint) {x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==12");]
+
+let%test "test_shortcut_12" = test_exec_tx
+  "contract C {  
+      uint x;
+      function f() public { if (true && this.g()==1) x+=1; else x+=2; }
+      function g() public returns(uint) {x=10; return 1;} 
+  }"
+  ["0xA:0xC.f()"] 
+  [("x==11");]
+
+let%test "test_shortcut_13" = test_exec_tx
+  "contract C {
+      uint x;
+      uint y;
+      function f() public { 
+        x = 1;
+        if (x==3 && this.g()==5) { x = x + 1; }
+      }
+      function g() public returns(uint) { 
+        y = y + 1;
+        return 5; 
+      }
+  }"
+  ["0xA:0xC.f()"]
+  ["x==1"; "y==0"]
+
+  let%test "test_shortcut_14" = test_exec_tx
+  "contract C {
+      uint x;
+      uint y;
+      function f() public { 
+        x = 1;
+        if (x==1 && this.g()==5) { x = x + 1; } //(x = 1+1)
+      }
+      function g() public returns(uint) { 
+        y = y + 1;
+        return 5; 
+      }
+  }"
+  ["0xA:0xC.f()"]
+  ["x==2"; "y==1"]
+
+let%test "test_shortcut_15" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return true; }
+      function add01000() public returns(bool) { x+=8; return true; }
+      function add00100() public returns(bool) { x+=4; return true; }
+      function f() public {x=0; if (this.add10000() || this.add01000() || this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==18")]
+
+let%test "test_shortcut_16" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return false; }
+      function add01000() public returns(bool) { x+=8; return true; }
+      function add00100() public returns(bool) { x+=4; return true; }
+      function f() public {x=0; if (this.add10000() || this.add01000() || this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==26")]
+
+let%test "test_shortcut_17" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return false; }
+      function add01000() public returns(bool) { x+=8; return false; }
+      function add00100() public returns(bool) { x+=4; return true; }
+      function f() public {x=0; if (this.add10000() || this.add01000() || this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==30")]
+
+let%test "test_shortcut_18" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return false; }
+      function add01000() public returns(bool) { x+=8; return false; }
+      function add00100() public returns(bool) { x+=4; return false; }
+      function f() public {x=0; if (this.add10000() || this.add01000() || this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==29")]
+
+let%test "test_shortcut_19" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return false; }
+      function add01000() public returns(bool) { x+=8; return false; }
+      function add00100() public returns(bool) { x+=4; return false; }
+      function f() public {x=0; if (this.add10000() && this.add01000() && this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==17")]
+
+let%test "test_shortcut_20" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return true; }
+      function add01000() public returns(bool) { x+=8; return false; }
+      function add00100() public returns(bool) { x+=4; return false; }
+      function f() public {x=0; if (this.add10000() && this.add01000() && this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==25")]
+
+let%test "test_shortcut_21" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return true; }
+      function add01000() public returns(bool) { x+=8; return true; }
+      function add00100() public returns(bool) { x+=4; return false; }
+      function f() public {x=0; if (this.add10000() && this.add01000() && this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==29")]
+
+let%test "test_shortcut_22" = test_exec_tx
+  "contract C {  
+      uint x;
+      function add10000() public returns(bool) { x+=16; return true; }
+      function add01000() public returns(bool) { x+=8; return true; }
+      function add00100() public returns(bool) { x+=4; return true; }
+      function f() public {x=0; if (this.add10000() && this.add01000() && this.add00100()) x+=2; else x+=1;} 
+  }"
+  ["0xA:0xC.f()"]
+  [("x==30")]
