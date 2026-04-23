@@ -982,8 +982,27 @@ let%test "test_var_mutability_4" = test_exec_tx
   ["0xA:0xC.f()"] 
   [("x==3");]
 
+let%test "test_var_mutability_5" = test_exec_tx
+  "contract C {
+    int constant N=1;
+    int x;
+    function f(int n) external { if (n>0) x+=1; else N=0; }
+  }"
+  ["0xA:0xC.f(1)"; "0xA:0xC.f(1)"] 
+  ["x==2"]
+
+let%test "test_var_mutability_5" = test_exec_tx
+  "contract C {
+    int constant N=1;
+    int x;
+    function g(int n) public { if (n>0) x+=1; else N=0; }
+    function f(int n) public { this.g(n); x+=1; } 
+  }"
+  ["0xA:0xC.f(1)"; "0xA:0xC.f(0)"] 
+  ["x==2"]
+
 (*
-let%test "test_var_mutability_5_constructor_revert" = test_exec_tx
+let%test "test_var_mutability_constructor_revert" = test_exec_tx
   "contract C {
       uint constant x = 1;
       constructor() { x = 2; }
