@@ -697,6 +697,9 @@ let%test "test_fun_20" = test_exec_fun
   [("0xC","this.balance==100"); ("0xD","this.balance==0")]
 
 
+(********************************************************************************
+ * Shortcut semantics
+ ********************************************************************************)
 
 let%test "test_shortcut_1" = test_exec_tx
   "contract C {  
@@ -766,11 +769,11 @@ let%test "test_shortcut_7" = test_exec_tx
       uint x;
       uint y;
       function f() public { 
-          x = 1;  // primo termine sarà true (x==1)
+          x = 1;
           if (x==1 || this.g()==5) { x = x + 1; }
       }
       function g() public returns(uint) { 
-          y = y + 1;  // contatore chiamate
+          y = y + 1;
           return 5; 
       }
   }"
@@ -782,11 +785,11 @@ let%test "test_shortcut_7" = test_exec_tx
       uint x;
       uint y;
       function f() public { 
-          x = 1;  // primo termine sarà true (x==1)
+          x = 1;
           if (x==2 || this.g()==5) { x = x + 1; }
       }
       function g() public returns(uint) { 
-          y = y + 1;  // contatore chiamate
+          y = y + 1;
           return 5; 
       }
   }"

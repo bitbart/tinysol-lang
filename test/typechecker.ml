@@ -587,6 +587,10 @@ let%test "test_typecheck_enum_6" = test_typecheck
   false
 
 
+(********************************************************************************
+ * Function mutability modifiers
+ ********************************************************************************)
+
 let%test "test_typecheck_mutability_1" = test_typecheck
   "contract C {
       uint x;
